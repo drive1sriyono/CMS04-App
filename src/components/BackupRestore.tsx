@@ -7,10 +7,12 @@ import {
   CheckCircle, 
   AlertTriangle,
   Server,
-  FileJson
+  FileJson,
+  CloudUpload
 } from 'lucide-react';
 import { User, Warga, FinancialTransaction, DatabaseStatus } from '../types';
 import { resetToDefault } from '../data/initialData';
+import { testSupabaseRealConnection, pushAllLocalDataToSupabase } from '../utils/supabase';
 
 interface BackupRestoreProps {
   currentUser: User;
@@ -38,6 +40,7 @@ export default function BackupRestore({
 }: BackupRestoreProps) {
   
   const [testingConnection, setTestingConnection] = useState(false);
+  const [syncingCloud, setSyncingCloud] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -155,73 +158,57 @@ export default function BackupRestore({
     }
   };
 
-  // REAL Connection Test to Supabase REST API via HTTP fetch using Vercel Environment Variables
+  // REAL Connection Test to Supabase
   const testSupabaseConnection = async () => {
-    if (!supabaseUrl || !supabaseUrl.startsWith('http')) {
-      setErrorMsg('VITE_SUPABASE_URL belum dikonfigurasi di Vercel Environment Variables.');
-      return;
-    }
-
     setTestingConnection(true);
     setTestResult(null);
     setErrorMsg('');
 
-    const cleanUrl = supabaseUrl.trim().replace(/\/+$/, '');
+    const res = await testSupabaseRealConnection();
+    setTestingConnection(false);
 
-    try {
-      const startTime = performance.now();
-      
-      // Ping Supabase REST API schema / auth health endpoint
-      const targetEndpoint = `${cleanUrl}/rest/v1/`;
-      const headers: Record<string, string> = {
-        'Accept': 'application/json'
-      };
-      if (supabaseAnonKey && supabaseAnonKey.trim()) {
-        headers['apikey'] = supabaseAnonKey.trim();
-        headers['Authorization'] = `Bearer ${supabaseAnonKey.trim()}`;
-      }
-
-      const response = await fetch(targetEndpoint, {
-        method: 'GET',
-        headers,
-        cache: 'no-cache'
+    if (res.success) {
+      onUpdateDbStatus({
+        connected: true,
+        mode: 'online',
+        lastTested: `Real Online (${new Date().toLocaleTimeString('id-ID')} • ${res.latency}ms)`
       });
-
-      const endTime = performance.now();
-      const latency = Math.round(endTime - startTime);
-
-      if (response.ok || response.status === 200 || response.status === 204) {
-        onUpdateDbStatus({
-          connected: true,
-          mode: 'online',
-          lastTested: `Real Online (${new Date().toLocaleTimeString('id-ID')} • ${latency}ms)`
-        });
-        setTestResult(`✅ REAL KONEKSI BERHASIL! (HTTP ${response.status} OK - Latensi ${latency}ms). Endpoint Supabase Cloud merespons langsung secara real.`);
-      } else if (response.status === 401 || response.status === 403) {
-        // Host reachable, but credentials required
-        onUpdateDbStatus({
-          connected: true,
-          mode: 'online',
-          lastTested: `Host Reachable (${new Date().toLocaleTimeString('id-ID')} • HTTP ${response.status})`
-        });
-        setTestResult(`⚠️ SERVER SUPABASE TERHUBUNG KONTAN (${response.status} ${response.statusText} - ${latency}ms). Domain Supabase aktif secara real. ${!supabaseAnonKey.trim() ? 'Isi Supabase Anon Key untuk otentikasi penuh.' : 'Periksa kesesuaian Anon Key.'}`);
-      } else {
-        onUpdateDbStatus({
-          connected: false,
-          mode: 'offline',
-          lastTested: `HTTP ${response.status}`
-        });
-        setTestResult(`⚠️ Server Supabase merespons dengan HTTP Status ${response.status} (${response.statusText}).`);
-      }
-    } catch (err: any) {
+      setTestResult(res.message);
+    } else {
       onUpdateDbStatus({
         connected: false,
         mode: 'offline',
-        lastTested: `Gagal Connect (${new Date().toLocaleTimeString('id-ID')})`
+        lastTested: `Perlu Cek (${new Date().toLocaleTimeString('id-ID')})`
       });
-      setTestResult(`❌ KONEKSI REAL GAGAL: ${err.message || 'Tidak dapat terhubung ke endpoint'}. Pastikan URL Supabase benar dan perangkat Anda terhubung ke internet.`);
-    } finally {
-      setTestingConnection(false);
+      setTestResult(res.message);
+    }
+  };
+
+  // Manual Sync Local State to Supabase Cloud
+  const handleManualSyncToSupabase = async () => {
+    setSyncingCloud(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    const res = await pushAllLocalDataToSupabase({
+      users,
+      warga,
+      transactions,
+      submissions: []
+    });
+
+    setSyncingCloud(false);
+
+    if (res.success) {
+      setSuccessMsg(res.message);
+      onUpdateDbStatus({
+        connected: true,
+        mode: 'online',
+        lastTested: `Selesai Sync (${new Date().toLocaleTimeString('id-ID')})`
+      });
+      setTimeout(() => setSuccessMsg(''), 6000);
+    } else {
+      setErrorMsg(res.message);
     }
   };
 
@@ -384,21 +371,29 @@ export default function BackupRestore({
             </div>
           </div>
 
-          <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row gap-3">
+          <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row gap-2">
             <button
               onClick={testSupabaseConnection}
               disabled={testingConnection}
-              className="w-full sm:w-1/2 py-2.5 gold-gradient-bg text-slate-950 font-black rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 cursor-pointer disabled:opacity-50 uppercase tracking-wider"
+              className="w-full sm:w-1/3 py-2.5 gold-gradient-bg text-slate-950 font-black rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/10 cursor-pointer disabled:opacity-50 uppercase tracking-wider"
             >
               <RefreshCw size={13} className={testingConnection ? 'animate-spin' : ''} />
-              {testingConnection ? 'Menguji HTTP Real...' : 'Tes Koneksi Real'}
+              {testingConnection ? 'Menguji Real...' : 'Tes Koneksi'}
+            </button>
+            <button
+              onClick={handleManualSyncToSupabase}
+              disabled={syncingCloud}
+              className="w-full sm:w-1/3 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 cursor-pointer disabled:opacity-50 uppercase tracking-wider"
+            >
+              <CloudUpload size={14} className={syncingCloud ? 'animate-bounce' : ''} />
+              {syncingCloud ? 'Mengunggah...' : 'Upload ke Supabase'}
             </button>
             <button
               onClick={toggleMockMode}
-              className="w-full sm:w-1/2 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              className="w-full sm:w-1/3 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
             >
               <Database size={13} className="text-amber-400" />
-              Toggle Mode Akses
+              Toggle Mode
             </button>
           </div>
 

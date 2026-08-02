@@ -33,6 +33,15 @@ import {
   saveStoredDbStatus 
 } from './data/initialData';
 
+// Import Supabase Sync Helpers
+import {
+  fetchAllFromSupabase,
+  pushAllLocalDataToSupabase,
+  syncSingleUserToSupabase,
+  deleteUserFromSupabase,
+  getSupabaseClient
+} from './utils/supabase';
+
 // Import Views
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -58,10 +67,15 @@ export default function App() {
   // Initialize and load states on mount
   useEffect(() => {
     document.title = 'CMS04';
-    setUsers(getStoredUsers());
-    setWarga(getStoredWarga());
-    setTransactions(getStoredTransactions());
-    setSubmissions(getStoredSubmissions());
+    const initialLocalUsers = getStoredUsers();
+    const initialLocalWarga = getStoredWarga();
+    const initialLocalTx = getStoredTransactions();
+    const initialLocalSub = getStoredSubmissions();
+
+    setUsers(initialLocalUsers);
+    setWarga(initialLocalWarga);
+    setTransactions(initialLocalTx);
+    setSubmissions(initialLocalSub);
     setDbStatus(getStoredDbStatus());
 
     // Auto-login session recovery from sessionStorage if available
@@ -74,13 +88,50 @@ export default function App() {
         sessionStorage.removeItem('rt_digital_active_user');
       }
     }
+
+    // Real-time Sync with Supabase
+    fetchAllFromSupabase().then(res => {
+      if (res.users && res.users.length > 0) {
+        setUsers(res.users);
+        saveStoredUsers(res.users);
+        if (res.warga) { setWarga(res.warga); saveStoredWarga(res.warga); }
+        if (res.transactions) { setTransactions(res.transactions); saveStoredTransactions(res.transactions); }
+        if (res.submissions) { setSubmissions(res.submissions); saveStoredSubmissions(res.submissions); }
+        const newDbStatus: DatabaseStatus = {
+          connected: true,
+          mode: 'online',
+          lastTested: `Terhubung (${new Date().toLocaleTimeString('id-ID')})`
+        };
+        setDbStatus(newDbStatus);
+        saveStoredDbStatus(newDbStatus);
+      } else if (!res.error) {
+        // Remote database table 'users' is currently empty, push local state to Supabase Cloud
+        pushAllLocalDataToSupabase({
+          users: initialLocalUsers,
+          warga: initialLocalWarga,
+          transactions: initialLocalTx,
+          submissions: initialLocalSub
+        }).then(pushRes => {
+          if (pushRes.success) {
+            const newDbStatus: DatabaseStatus = {
+              connected: true,
+              mode: 'online',
+              lastTested: `Tersinkron (${new Date().toLocaleTimeString('id-ID')})`
+            };
+            setDbStatus(newDbStatus);
+            saveStoredDbStatus(newDbStatus);
+          }
+        });
+      }
+    });
   }, []);
 
-  // Sync personal profile modifications instantly to currentUser session state
+  // Sync personal profile modifications instantly to currentUser session state & Supabase
   const handleUpdateUser = (updatedUser: User) => {
     const updatedUsers = users.map(u => u.id === updatedUser.id ? updatedUser : u);
     setUsers(updatedUsers);
     saveStoredUsers(updatedUsers);
+    syncSingleUserToSupabase(updatedUser);
 
     if (currentUser && currentUser.id === updatedUser.id) {
       setCurrentUser(updatedUser);
@@ -108,11 +159,12 @@ export default function App() {
     }
   };
 
-  // Add User Trigger - synchronizes with Warga listing if the role is 'warga'
+  // Add User Trigger - synchronizes with Warga listing and Supabase Cloud
   const handleAddUser = (newUser: User) => {
     const updatedUsers = [...users, newUser];
     setUsers(updatedUsers);
     saveStoredUsers(updatedUsers);
+    syncSingleUserToSupabase(newUser);
 
     if (newUser.role === 'warga') {
       const newWarga: Warga = {
@@ -131,7 +183,7 @@ export default function App() {
     }
   };
 
-  // Delete user trigger - deletes corresponding citizens list (warga)
+  // Delete user trigger - deletes corresponding citizens list (warga) and Supabase record
   const handleDeleteUser = (userId: string) => {
     // Prevent deletion of Main Admin account
     if (userId === 'user-admin') {
@@ -142,6 +194,7 @@ export default function App() {
     const updatedUsers = users.filter(u => u.id !== userId);
     setUsers(updatedUsers);
     saveStoredUsers(updatedUsers);
+    deleteUserFromSupabase(userId);
 
     const updatedWargaList = warga.filter(w => w.id !== userId);
     setWarga(updatedWargaList);
