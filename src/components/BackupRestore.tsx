@@ -37,17 +37,14 @@ export default function BackupRestore({
   onUpdateDbStatus
 }: BackupRestoreProps) {
   
-  const [supabaseUrl, setSupabaseUrl] = useState<string>(() => {
-    return localStorage.getItem('supabase_url') || (import.meta as any).env?.VITE_SUPABASE_URL || 'https://rt-digital-z91s.supabase.co';
-  });
-  const [supabaseAnonKey, setSupabaseAnonKey] = useState<string>(() => {
-    return localStorage.getItem('supabase_anon_key') || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
-  });
-
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Get Supabase credentials automatically from Vercel / Vite Environment Variables
+  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
+  const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
   const [dragOver, setDragOver] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -158,10 +155,10 @@ export default function BackupRestore({
     }
   };
 
-  // REAL Connection Test to Supabase REST API via HTTP fetch
+  // REAL Connection Test to Supabase REST API via HTTP fetch using Vercel Environment Variables
   const testSupabaseConnection = async () => {
     if (!supabaseUrl || !supabaseUrl.startsWith('http')) {
-      setErrorMsg('Harap masukkan Supabase Project URL yang valid (contoh: https://rt-digital-z91s.supabase.co)');
+      setErrorMsg('VITE_SUPABASE_URL belum dikonfigurasi di Vercel Environment Variables.');
       return;
     }
 
@@ -170,10 +167,6 @@ export default function BackupRestore({
     setErrorMsg('');
 
     const cleanUrl = supabaseUrl.trim().replace(/\/+$/, '');
-    localStorage.setItem('supabase_url', cleanUrl);
-    if (supabaseAnonKey) {
-      localStorage.setItem('supabase_anon_key', supabaseAnonKey.trim());
-    }
 
     try {
       const startTime = performance.now();
@@ -183,7 +176,7 @@ export default function BackupRestore({
       const headers: Record<string, string> = {
         'Accept': 'application/json'
       };
-      if (supabaseAnonKey.trim()) {
+      if (supabaseAnonKey && supabaseAnonKey.trim()) {
         headers['apikey'] = supabaseAnonKey.trim();
         headers['Authorization'] = `Bearer ${supabaseAnonKey.trim()}`;
       }
@@ -360,7 +353,7 @@ export default function BackupRestore({
             </div>
 
             <p className="text-xs text-slate-400 leading-relaxed mb-5">
-              Tes koneksi real langsung ke endpoint REST Supabase melalui permintaan HTTP fetch nyata. Masukkan URL dan Key Supabase Anda di bawah ini:
+              Kredensial database Supabase terhubung secara otomatis via <strong>Vercel Environment Variables</strong> (<code>VITE_SUPABASE_URL</code> &amp; <code>VITE_SUPABASE_ANON_KEY</code>). Pengguna tidak perlu menginputkan API Key/URL secara manual di aplikasi.
             </p>
 
             {/* Current Status Badge Widget */}
@@ -386,34 +379,6 @@ export default function BackupRestore({
                 <div className="flex justify-between items-center text-xs border-t border-slate-800/80 pt-2">
                   <span className="text-slate-400 font-medium">Pengujian Terakhir:</span>
                   <span className="font-mono text-[11px] text-amber-300">{dbStatus.lastTested || 'Belum diuji secara real'}</span>
-                </div>
-              </div>
-
-              {/* Editable Credential Inputs */}
-              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 space-y-3">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
-                    SUPABASE_URL
-                  </label>
-                  <input
-                    type="text"
-                    value={supabaseUrl}
-                    onChange={(e) => setSupabaseUrl(e.target.value)}
-                    placeholder="https://xyz.supabase.co"
-                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-amber-400 font-mono focus:outline-none focus:border-amber-500 transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
-                    SUPABASE_ANON_KEY (Opsional untuk ping host / Wajib untuk data)
-                  </label>
-                  <input
-                    type="password"
-                    value={supabaseAnonKey}
-                    onChange={(e) => setSupabaseAnonKey(e.target.value)}
-                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 font-mono focus:outline-none focus:border-amber-500 transition-all"
-                  />
                 </div>
               </div>
             </div>
@@ -503,11 +468,17 @@ CREATE TABLE IF NOT EXISTS public.payment_submissions (
   approved_at TIMESTAMP WITH TIME ZONE
 );
 
--- Enable Row Level Security (RLS) or Allow Public Access for Anon API Key
+-- Enable Row Level Security (RLS)
 ALTER TABLE public.warga ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.financial_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_submissions ENABLE ROW LEVEL SECURITY;
+
+-- Idempotent RLS Policies
+DROP POLICY IF EXISTS "Allow anon select and insert" ON public.warga;
+DROP POLICY IF EXISTS "Allow anon select and insert" ON public.users;
+DROP POLICY IF EXISTS "Allow anon select and insert" ON public.financial_transactions;
+DROP POLICY IF EXISTS "Allow anon select and insert" ON public.payment_submissions;
 
 CREATE POLICY "Allow anon select and insert" ON public.warga FOR ALL USING (true);
 CREATE POLICY "Allow anon select and insert" ON public.users FOR ALL USING (true);
@@ -548,10 +519,10 @@ CREATE POLICY "Allow anon select and insert" ON public.payment_submissions FOR A
           <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
             <div className="font-bold text-amber-400 flex items-center gap-1.5">
               <span className="w-5 h-5 bg-amber-500/20 rounded-full flex items-center justify-center text-[10px]">3</span>
-              <span>Salin API Credentials</span>
+              <span>Atur Vercel Environment</span>
             </div>
             <p className="text-slate-400 text-[11px] leading-relaxed">
-              Buka menu <strong>Project Settings → API</strong>. Salin <code>Project URL</code> dan <code>anon public key</code> ke dalam form di atas untuk langsung menguji koneksi.
+              Buka Vercel Dashboard → <strong>Environment Variables</strong>. Tambahkan <code>VITE_SUPABASE_URL</code> &amp; <code>VITE_SUPABASE_ANON_KEY</code>.
             </p>
           </div>
         </div>
