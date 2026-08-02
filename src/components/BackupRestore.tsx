@@ -447,6 +447,116 @@ export default function BackupRestore({
 
       </div>
 
+      {/* Panduan Setup Supabase & SQL Schema */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-2">
+            <Database size={20} className="text-amber-400" />
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Panduan Setup & SQL Schema Supabase</h3>
+          </div>
+          <button
+            onClick={() => {
+              const sql = `-- SCHEMA CMS04 RT DIGITAL FOR SUPABASE
+CREATE TABLE IF NOT EXISTS public.warga (
+  id TEXT PRIMARY KEY,
+  full_name TEXT NOT NULL,
+  nik TEXT,
+  phone TEXT,
+  address_block TEXT,
+  house_status TEXT DEFAULT 'Pemilik',
+  family_members INTEGER DEFAULT 1,
+  is_active BOOLEAN DEFAULT true,
+  birth_date DATE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.users (
+  id TEXT PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL,
+  warga_id TEXT REFERENCES public.warga(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.financial_transactions (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL CHECK (type IN ('INCOME', 'EXPENSE')),
+  amount NUMERIC NOT NULL,
+  category TEXT NOT NULL,
+  date DATE NOT NULL,
+  description TEXT,
+  proof_image TEXT,
+  created_by TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.payment_submissions (
+  id TEXT PRIMARY KEY,
+  warga_id TEXT NOT NULL REFERENCES public.warga(id) ON DELETE CASCADE,
+  month TEXT NOT NULL,
+  year INTEGER NOT NULL,
+  amount NUMERIC NOT NULL,
+  proof_image TEXT,
+  status TEXT DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+  submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  approved_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Enable Row Level Security (RLS) or Allow Public Access for Anon API Key
+ALTER TABLE public.warga ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.financial_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payment_submissions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow anon select and insert" ON public.warga FOR ALL USING (true);
+CREATE POLICY "Allow anon select and insert" ON public.users FOR ALL USING (true);
+CREATE POLICY "Allow anon select and insert" ON public.financial_transactions FOR ALL USING (true);
+CREATE POLICY "Allow anon select and insert" ON public.payment_submissions FOR ALL USING (true);
+`;
+              navigator.clipboard.writeText(sql);
+              alert('SQL Schema berhasil disalin ke clipboard! Silahkan salin ke Supabase SQL Editor.');
+            }}
+            className="px-3.5 py-1.5 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <Download size={14} />
+            <span>Salin Script SQL Schema</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300">
+          <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
+            <div className="font-bold text-amber-400 flex items-center gap-1.5">
+              <span className="w-5 h-5 bg-amber-500/20 rounded-full flex items-center justify-center text-[10px]">1</span>
+              <span>Buat Project Supabase</span>
+            </div>
+            <p className="text-slate-400 text-[11px] leading-relaxed">
+              Buka <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-amber-400 underline">supabase.com</a>, daftar/login, buat New Project dengan nama <strong>CMS04-RT-DIGITAL</strong> dan tentukan Password Database.
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
+            <div className="font-bold text-amber-400 flex items-center gap-1.5">
+              <span className="w-5 h-5 bg-amber-500/20 rounded-full flex items-center justify-center text-[10px]">2</span>
+              <span>Jalankan SQL Schema</span>
+            </div>
+            <p className="text-slate-400 text-[11px] leading-relaxed">
+              Masuk ke menu <strong>SQL Editor</strong> di dashboard Supabase, tempelkan (paste) script SQL Schema dari tombol di atas, lalu klik <strong>Run</strong>.
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
+            <div className="font-bold text-amber-400 flex items-center gap-1.5">
+              <span className="w-5 h-5 bg-amber-500/20 rounded-full flex items-center justify-center text-[10px]">3</span>
+              <span>Salin API Credentials</span>
+            </div>
+            <p className="text-slate-400 text-[11px] leading-relaxed">
+              Buka menu <strong>Project Settings → API</strong>. Salin <code>Project URL</code> dan <code>anon public key</code> ke dalam form di atas untuk langsung menguji koneksi.
+            </p>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }
