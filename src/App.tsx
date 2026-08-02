@@ -39,6 +39,8 @@ import {
   pushAllLocalDataToSupabase,
   syncSingleUserToSupabase,
   deleteUserFromSupabase,
+  syncSingleWargaToSupabase,
+  deleteWargaFromSupabase,
   getSupabaseClient
 } from './utils/supabase';
 
@@ -64,6 +66,50 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'profile' | 'finance' | 'warga' | 'users' | 'backup'>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Reconcile users with warga list (all non-admin accounts MUST be in Warga list)
+  const reconcileUsersAndWarga = (userList: User[], wargaList: Warga[]): Warga[] => {
+    let updatedWarga = [...wargaList];
+
+    userList.forEach(user => {
+      if (user.role !== 'admin') {
+        const idx = updatedWarga.findIndex(
+          w => w.id === user.id || (w.username && user.username && w.username.toLowerCase() === user.username.toLowerCase())
+        );
+        if (idx >= 0) {
+          updatedWarga[idx] = {
+            ...updatedWarga[idx],
+            id: user.id,
+            fullName: user.fullName || updatedWarga[idx].fullName,
+            username: user.username || updatedWarga[idx].username,
+            blok: user.blok || updatedWarga[idx].blok,
+            houseStatus: user.houseStatus || updatedWarga[idx].houseStatus || 'Pemilik',
+            phone: user.phone || updatedWarga[idx].phone || '',
+            birthDate: user.birthDate || updatedWarga[idx].birthDate || ''
+          };
+        } else {
+          updatedWarga.push({
+            id: user.id,
+            fullName: user.fullName,
+            username: user.username,
+            blok: user.blok,
+            houseStatus: user.houseStatus || 'Pemilik',
+            phone: user.phone || '',
+            statusIuran: 'Lunas',
+            birthDate: user.birthDate || '',
+            paidMonths: []
+          });
+        }
+      } else {
+        // Exclude admin accounts from Warga listing
+        updatedWarga = updatedWarga.filter(
+          w => w.id !== user.id && (!w.username || w.username.toLowerCase() !== user.username.toLowerCase())
+        );
+      }
+    });
+
+    return updatedWarga;
+  };
+
   // Initialize and load states on mount
   useEffect(() => {
     document.title = 'CMS04';
@@ -72,8 +118,11 @@ export default function App() {
     const initialLocalTx = getStoredTransactions();
     const initialLocalSub = getStoredSubmissions();
 
+    const syncedLocalWarga = reconcileUsersAndWarga(initialLocalUsers, initialLocalWarga);
+
     setUsers(initialLocalUsers);
-    setWarga(initialLocalWarga);
+    setWarga(syncedLocalWarga);
+    saveStoredWarga(syncedLocalWarga);
     setTransactions(initialLocalTx);
     setSubmissions(initialLocalSub);
     setDbStatus(getStoredDbStatus());
@@ -92,11 +141,21 @@ export default function App() {
     // Real-time Sync with Supabase
     fetchAllFromSupabase().then(res => {
       if (res.users && res.users.length > 0) {
-        setUsers(res.users);
-        saveStoredUsers(res.users);
-        if (res.warga) { setWarga(res.warga); saveStoredWarga(res.warga); }
+        const fetchedUsers = res.users;
+        const fetchedWarga = res.warga || [];
+        const reconciledWarga = reconcileUsersAndWarga(fetchedUsers, fetchedWarga);
+
+        setUsers(fetchedUsers);
+        saveStoredUsers(fetchedUsers);
+        setWarga(reconciledWarga);
+        saveStoredWarga(reconciledWarga);
+
+        // Sync reconciled Warga items to Supabase
+        reconciledWarga.forEach(w => syncSingleWargaToSupabase(w));
+
         if (res.transactions) { setTransactions(res.transactions); saveStoredTransactions(res.transactions); }
         if (res.submissions) { setSubmissions(res.submissions); saveStoredSubmissions(res.submissions); }
+
         const newDbStatus: DatabaseStatus = {
           connected: true,
           mode: 'online',
@@ -108,7 +167,7 @@ export default function App() {
         // Remote database table 'users' is currently empty, push local state to Supabase Cloud
         pushAllLocalDataToSupabase({
           users: initialLocalUsers,
-          warga: initialLocalWarga,
+          warga: syncedLocalWarga,
           transactions: initialLocalTx,
           submissions: initialLocalSub
         }).then(pushRes => {
@@ -138,24 +197,32 @@ export default function App() {
       sessionStorage.setItem('rt_digital_active_user', JSON.stringify(updatedUser));
     }
 
-    // Also automatically sync in citizen list if they are registered there
-    const existsInWarga = warga.some(w => w.id === updatedUser.id);
-    if (existsInWarga || updatedUser.role === 'warga') {
-      const updatedWargaList = warga.map(w => {
-        if (w.id === updatedUser.id) {
-          return {
-            ...w,
-            fullName: updatedUser.fullName,
-            blok: updatedUser.blok,
-            houseStatus: updatedUser.houseStatus,
-            phone: updatedUser.phone,
-            birthDate: updatedUser.birthDate
-          };
-        }
-        return w;
-      });
+    if (updatedUser.role !== 'admin') {
+      const existingW = warga.find(w => w.id === updatedUser.id);
+      const updatedWargaItem: Warga = {
+        id: updatedUser.id,
+        fullName: updatedUser.fullName,
+        username: updatedUser.username,
+        blok: updatedUser.blok,
+        houseStatus: updatedUser.houseStatus || 'Pemilik',
+        phone: updatedUser.phone || '',
+        statusIuran: existingW ? existingW.statusIuran : 'Lunas',
+        birthDate: updatedUser.birthDate || '',
+        paidMonths: existingW ? existingW.paidMonths : []
+      };
+      const updatedWargaList = existingW
+        ? warga.map(w => w.id === updatedUser.id ? updatedWargaItem : w)
+        : [...warga, updatedWargaItem];
+
       setWarga(updatedWargaList);
       saveStoredWarga(updatedWargaList);
+      syncSingleWargaToSupabase(updatedWargaItem);
+    } else {
+      // Admin account - remove from Warga listing
+      const updatedWargaList = warga.filter(w => w.id !== updatedUser.id);
+      setWarga(updatedWargaList);
+      saveStoredWarga(updatedWargaList);
+      deleteWargaFromSupabase(updatedUser.id);
     }
   };
 
@@ -166,20 +233,23 @@ export default function App() {
     saveStoredUsers(updatedUsers);
     syncSingleUserToSupabase(newUser);
 
-    if (newUser.role === 'warga') {
+    // Any non-admin account automatically creates/syncs a Warga record
+    if (newUser.role !== 'admin') {
       const newWarga: Warga = {
         id: newUser.id,
         fullName: newUser.fullName,
         username: newUser.username,
         blok: newUser.blok,
-        houseStatus: newUser.houseStatus,
-        phone: newUser.phone,
-        statusIuran: 'Pending', // default status on new user creation
-        birthDate: newUser.birthDate
+        houseStatus: newUser.houseStatus || 'Pemilik',
+        phone: newUser.phone || '',
+        statusIuran: 'Lunas',
+        birthDate: newUser.birthDate || '',
+        paidMonths: []
       };
-      const updatedWargaList = [...warga, newWarga];
+      const updatedWargaList = [...warga.filter(w => w.id !== newUser.id), newWarga];
       setWarga(updatedWargaList);
       saveStoredWarga(updatedWargaList);
+      syncSingleWargaToSupabase(newWarga);
     }
   };
 
@@ -199,6 +269,7 @@ export default function App() {
     const updatedWargaList = warga.filter(w => w.id !== userId);
     setWarga(updatedWargaList);
     saveStoredWarga(updatedWargaList);
+    deleteWargaFromSupabase(userId);
   };
 
   // Add Citizen trigger
@@ -206,6 +277,7 @@ export default function App() {
     const updatedW = [...warga, newW];
     setWarga(updatedW);
     saveStoredWarga(updatedW);
+    syncSingleWargaToSupabase(newW);
   };
 
   // Update Citizen status/block
@@ -213,6 +285,7 @@ export default function App() {
     const updatedWList = warga.map(w => w.id === updatedW.id ? updatedW : w);
     setWarga(updatedWList);
     saveStoredWarga(updatedWList);
+    syncSingleWargaToSupabase(updatedW);
 
     // Also sync to matching user account if any
     const userAcc = users.find(u => u.id === updatedW.id);
@@ -220,6 +293,7 @@ export default function App() {
       const updatedAcc = {
         ...userAcc,
         fullName: updatedW.fullName,
+        username: updatedW.username || userAcc.username,
         blok: updatedW.blok,
         houseStatus: updatedW.houseStatus,
         phone: updatedW.phone,
@@ -228,6 +302,7 @@ export default function App() {
       const updatedUsers = users.map(u => u.id === updatedW.id ? updatedAcc : u);
       setUsers(updatedUsers);
       saveStoredUsers(updatedUsers);
+      syncSingleUserToSupabase(updatedAcc);
 
       if (currentUser && currentUser.id === updatedW.id) {
         setCurrentUser(updatedAcc);

@@ -347,3 +347,23 @@ export const deleteUserFromSupabase = async (userId: string) => {
     console.error('Error deleting user from Supabase:', e);
   }
 };
+
+export const syncSingleWargaToSupabase = async (warga: Warga) => {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await safeUpsert(client, 'warga', [mapWargaToSupabase(warga)]);
+  } catch (e) {
+    console.error('Error syncing warga to Supabase:', e);
+  }
+};
+
+export const deleteWargaFromSupabase = async (wargaId: string) => {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await client.from('warga').delete().eq('id', wargaId);
+  } catch (e) {
+    console.error('Error deleting warga from Supabase:', e);
+  }
+};
