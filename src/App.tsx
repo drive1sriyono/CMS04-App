@@ -352,8 +352,13 @@ export default function App() {
 
     // Dynamic auto-action: If it is a Pemasukan related to a citizen payment,
     // let's set their citizen iuran status to 'Lunas'!
-    if (newTx.type === 'Pemasukan' && newTx.wargaName) {
-      const match = warga.find(w => w.fullName.toLowerCase().trim() === newTx.wargaName?.toLowerCase().trim());
+    if (newTx.type === 'Pemasukan' && (newTx.wargaName || newTx.wargaId)) {
+      const match = warga.find(w => 
+        (newTx.wargaId && w.id === newTx.wargaId) ||
+        (newTx.wargaName && w.fullName.toLowerCase().trim() === newTx.wargaName.toLowerCase().trim()) ||
+        (newTx.wargaName && w.username && w.username.toLowerCase().trim() === newTx.wargaName.toLowerCase().trim()) ||
+        (newTx.wargaName && w.id === newTx.wargaName)
+      );
       if (match) {
         const existingMonths = match.paidMonths || [];
         const newPaidMonths = newTx.paidMonths || [];
@@ -398,6 +403,7 @@ export default function App() {
       date: targetSub.date,
       description: `Iuran Bulanan RT (Verifikasi Online) - ${targetSub.paidMonths.join(', ')}`,
       proofImage: targetSub.proofImage,
+      wargaId: targetSub.wargaId,
       wargaName: targetSub.wargaName,
       paidMonths: targetSub.paidMonths
     };
@@ -407,7 +413,12 @@ export default function App() {
     saveStoredTransactions(updatedTx);
 
     // 3. Sync Citizen's paidMonths array and statusIuran
-    const match = warga.find(w => w.fullName.toLowerCase().trim() === targetSub.wargaName.toLowerCase().trim());
+    const match = warga.find(w => 
+      (targetSub.wargaId && w.id === targetSub.wargaId) ||
+      w.fullName.toLowerCase().trim() === targetSub.wargaName.toLowerCase().trim() ||
+      (w.username && targetSub.wargaName && w.username.toLowerCase().trim() === targetSub.wargaName.toLowerCase().trim()) ||
+      (targetSub.submittedBy && w.username && w.username.toLowerCase().trim() === targetSub.submittedBy.toLowerCase().trim())
+    );
     if (match) {
       const existingMonths = match.paidMonths || [];
       const mergedMonths = Array.from(new Set([...existingMonths, ...targetSub.paidMonths]));
@@ -508,7 +519,15 @@ export default function App() {
       case 'dashboard':
         return <Dashboard currentUser={currentUser} warga={warga} transactions={transactions} submissions={submissions} />;
       case 'profile':
-        return <MyProfile currentUser={currentUser} onUpdateUser={handleUpdateUser} />;
+        return (
+          <MyProfile 
+            currentUser={currentUser} 
+            warga={warga}
+            transactions={transactions}
+            submissions={submissions}
+            onUpdateUser={handleUpdateUser} 
+          />
+        );
       case 'finance':
         return (
           <Finance 
@@ -542,6 +561,9 @@ export default function App() {
           <UserManagement 
             currentUser={currentUser} 
             users={users} 
+            warga={warga}
+            transactions={transactions}
+            submissions={submissions}
             onAddUser={handleAddUser} 
             onUpdateUser={handleUpdateUser} 
             onDeleteUser={handleDeleteUser} 

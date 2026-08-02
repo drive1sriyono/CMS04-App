@@ -74,11 +74,23 @@ export default function WargaData({
 
     const nameLower = w.fullName.trim().toLowerCase();
     const usernameLower = w.username?.trim().toLowerCase();
+    const targetId = w.id;
 
     transactions.forEach(t => {
       if (t.type !== 'Pemasukan') return;
-      const txWarga = t.wargaName?.trim().toLowerCase() || '';
-      if (txWarga && (txWarga === nameLower || (usernameLower && txWarga === usernameLower))) {
+      const txWName = t.wargaName?.trim().toLowerCase() || '';
+      const txWId = t.wargaId;
+
+      const isMatch = (
+        (targetId && txWId && txWId === targetId) ||
+        (txWName && (
+          txWName === nameLower ||
+          (usernameLower && txWName === usernameLower) ||
+          txWName === targetId
+        ))
+      );
+
+      if (isMatch) {
         if (t.paidMonths && Array.isArray(t.paidMonths)) {
           t.paidMonths.forEach(m => paidSet.add(m));
         }
@@ -88,6 +100,25 @@ export default function WargaData({
             paidSet.add(m);
           }
         });
+      }
+    });
+
+    submissions.forEach(s => {
+      if (s.status === 'Approved') {
+        const subName = s.wargaName?.trim().toLowerCase() || '';
+        const subUser = s.submittedBy?.trim().toLowerCase() || '';
+        const subId = s.wargaId;
+
+        const isMatch = (
+          (targetId && subId && subId === targetId) ||
+          subName === nameLower ||
+          (usernameLower && (subName === usernameLower || subUser === usernameLower)) ||
+          subName === targetId
+        );
+
+        if (isMatch && s.paidMonths && Array.isArray(s.paidMonths)) {
+          s.paidMonths.forEach(m => paidSet.add(m));
+        }
       }
     });
 
@@ -108,10 +139,20 @@ export default function WargaData({
     // 1. Check if there is any pending submission for this citizen
     const nameLower = w.fullName.trim().toLowerCase();
     const usernameLower = w.username?.trim().toLowerCase();
+    const targetId = w.id;
+
     const isPending = submissions.some(s => {
       if (s.status !== 'Pending') return false;
-      const subName = s.wargaName.trim().toLowerCase();
-      return subName === nameLower || (usernameLower && subName === usernameLower);
+      const subName = s.wargaName?.trim().toLowerCase() || '';
+      const subUser = s.submittedBy?.trim().toLowerCase() || '';
+      const subId = s.wargaId;
+
+      return (
+        (targetId && subId && subId === targetId) ||
+        subName === nameLower ||
+        (usernameLower && (subName === usernameLower || subUser === usernameLower)) ||
+        subName === targetId
+      );
     });
 
     if (isPending) return 'Pending';
@@ -578,10 +619,22 @@ export default function WargaData({
       {selectedWargaForDetail && (() => {
         const modalPaidMonths = getWargaPaidMonths(selectedWargaForDetail);
         const modalSummary = getPaidRangeSummary(modalPaidMonths);
-        const citizenTxs = transactions.filter(
-          t => t.type === 'Pemasukan' &&
-          t.wargaName?.toLowerCase().trim() === selectedWargaForDetail.fullName.toLowerCase().trim()
-        );
+        const citizenTxs = transactions.filter(t => {
+          if (t.type !== 'Pemasukan') return false;
+          const targetName = selectedWargaForDetail.fullName.toLowerCase().trim();
+          const targetUsername = selectedWargaForDetail.username?.toLowerCase().trim();
+          const targetId = selectedWargaForDetail.id;
+
+          const txName = t.wargaName?.toLowerCase().trim() || '';
+          const txId = t.wargaId;
+
+          return (
+            (txId && txId === targetId) ||
+            txName === targetName ||
+            (targetUsername && txName === targetUsername) ||
+            txName === targetId
+          );
+        });
 
         return (
           <div className="fixed inset-0 bg-slate-950/80 flex items-start justify-center pt-4 sm:pt-10 p-4 z-50 animate-fadeIn backdrop-blur-md overflow-y-auto">

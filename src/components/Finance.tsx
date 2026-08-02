@@ -71,12 +71,13 @@ export default function Finance({
   const isWarga = currentUser.role === 'warga';
 
   // Helper function to calculate months already paid for any citizen (Cumulative Sequential Rule)
-  const getWargaAlreadyPaidMonths = (citizenName: string): string[] => {
-    if (!citizenName) return [];
-    const nameLower = citizenName.trim().toLowerCase();
+  const getWargaAlreadyPaidMonths = (citizenNameOrId: string): string[] => {
+    if (!citizenNameOrId) return [];
+    const searchClean = citizenNameOrId.trim().toLowerCase();
     const matchWarga = warga.find(
-      w => w.fullName.toLowerCase().trim() === nameLower ||
-           (w.username && w.username.toLowerCase() === nameLower)
+      w => w.id === citizenNameOrId ||
+           w.fullName.toLowerCase().trim() === searchClean ||
+           (w.username && w.username.toLowerCase().trim() === searchClean)
     );
 
     const paidSet = new Set<string>();
@@ -84,23 +85,56 @@ export default function Finance({
       matchWarga.paidMonths.forEach(m => paidSet.add(m));
     }
 
+    const targetName = matchWarga ? matchWarga.fullName.toLowerCase().trim() : searchClean;
+    const targetUsername = matchWarga?.username?.toLowerCase().trim();
+    const targetId = matchWarga?.id;
+
     transactions.forEach(t => {
-      if (t.type === 'Pemasukan' && t.wargaName && t.wargaName.trim().toLowerCase() === nameLower) {
-        if (t.paidMonths) {
-          t.paidMonths.forEach(m => paidSet.add(m));
-        }
-        MONTH_LIST.forEach(m => {
-          const shortM = m.replace(' 2026', '').toLowerCase();
-          if (t.description.toLowerCase().includes(shortM)) {
-            paidSet.add(m);
+      if (t.type === 'Pemasukan') {
+        const txWName = t.wargaName?.trim().toLowerCase() || '';
+        const txWId = t.wargaId;
+
+        const isMatch = (
+          (targetId && txWId && txWId === targetId) ||
+          (txWName && (
+            txWName === targetName ||
+            (targetUsername && txWName === targetUsername) ||
+            (targetId && txWName === targetId) ||
+            txWName === searchClean
+          ))
+        );
+
+        if (isMatch) {
+          if (t.paidMonths) {
+            t.paidMonths.forEach(m => paidSet.add(m));
           }
-        });
+          MONTH_LIST.forEach(m => {
+            const shortM = m.replace(' 2026', '').toLowerCase();
+            if (t.description.toLowerCase().includes(shortM)) {
+              paidSet.add(m);
+            }
+          });
+        }
       }
     });
 
     submissions.forEach(s => {
-      if (s.status === 'Approved' && s.wargaName.trim().toLowerCase() === nameLower) {
-        s.paidMonths.forEach(m => paidSet.add(m));
+      if (s.status === 'Approved') {
+        const subName = s.wargaName?.trim().toLowerCase() || '';
+        const subUser = s.submittedBy?.trim().toLowerCase() || '';
+        const subId = s.wargaId;
+
+        const isMatch = (
+          (targetId && subId && subId === targetId) ||
+          subName === targetName ||
+          (targetUsername && (subName === targetUsername || subUser === targetUsername)) ||
+          (targetId && subName === targetId) ||
+          subName === searchClean
+        );
+
+        if (isMatch && s.paidMonths) {
+          s.paidMonths.forEach(m => paidSet.add(m));
+        }
       }
     });
 
@@ -119,14 +153,38 @@ export default function Finance({
   };
 
   // Helper function to calculate months with pending approval for any citizen
-  const getWargaPendingSubmissionMonths = (citizenName: string): string[] => {
-    if (!citizenName) return [];
-    const nameLower = citizenName.trim().toLowerCase();
+  const getWargaPendingSubmissionMonths = (citizenNameOrId: string): string[] => {
+    if (!citizenNameOrId) return [];
+    const searchClean = citizenNameOrId.trim().toLowerCase();
+    const matchWarga = warga.find(
+      w => w.id === citizenNameOrId ||
+           w.fullName.toLowerCase().trim() === searchClean ||
+           (w.username && w.username.toLowerCase().trim() === searchClean)
+    );
+
+    const targetName = matchWarga ? matchWarga.fullName.toLowerCase().trim() : searchClean;
+    const targetUsername = matchWarga?.username?.toLowerCase().trim();
+    const targetId = matchWarga?.id;
+
     const pendingSet = new Set<string>();
 
     submissions.forEach(s => {
-      if (s.status === 'Pending' && s.wargaName.trim().toLowerCase() === nameLower) {
-        s.paidMonths.forEach(m => pendingSet.add(m));
+      if (s.status === 'Pending') {
+        const subName = s.wargaName?.trim().toLowerCase() || '';
+        const subUser = s.submittedBy?.trim().toLowerCase() || '';
+        const subId = s.wargaId;
+
+        const isMatch = (
+          (targetId && subId && subId === targetId) ||
+          subName === targetName ||
+          (targetUsername && (subName === targetUsername || subUser === targetUsername)) ||
+          (targetId && subName === targetId) ||
+          subName === searchClean
+        );
+
+        if (isMatch && s.paidMonths) {
+          s.paidMonths.forEach(m => pendingSet.add(m));
+        }
       }
     });
 
@@ -419,6 +477,13 @@ export default function Finance({
       return;
     }
 
+    // Find matching citizen ID if Pemasukan
+    const matchedCitizen = txType === 'Pemasukan' ? warga.find(
+      w => w.fullName.toLowerCase().trim() === wargaName.trim().toLowerCase() ||
+           (w.username && w.username.toLowerCase().trim() === wargaName.trim().toLowerCase()) ||
+           w.id === wargaName.trim()
+    ) : undefined;
+
     const newTx: FinancialTransaction = {
       id: `tx-${Date.now()}`,
       type: txType,
@@ -426,7 +491,8 @@ export default function Finance({
       date,
       description: description.trim(),
       proofImage: proofImage || undefined,
-      wargaName: txType === 'Pemasukan' ? wargaName.trim() : undefined,
+      wargaId: matchedCitizen?.id,
+      wargaName: txType === 'Pemasukan' ? (matchedCitizen?.fullName || wargaName.trim()) : undefined,
       recipient: txType === 'Pengeluaran' ? recipient.trim() : undefined,
       paidMonths: (txType === 'Pemasukan' && pemasukanCategory === 'iuran' && selectedMonths.length > 0) ? [...selectedMonths] : undefined
     };
@@ -468,6 +534,7 @@ export default function Finance({
 
     const newSub: PaymentSubmission = {
       id: `sub-${Date.now()}`,
+      wargaId: currentUser.id,
       wargaName: currentUser.fullName,
       blok: currentUser.blok,
       amount: Number(wargaSubAmount),
@@ -475,6 +542,7 @@ export default function Finance({
       paidMonths: [...wargaSubMonths],
       proofImage: wargaSubProof,
       status: 'Pending',
+      submittedBy: currentUser.username,
       submittedAt: new Date().toISOString()
     };
 

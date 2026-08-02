@@ -15,24 +15,138 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import { User, UserRole } from '../types';
+import { User, UserRole, Warga, FinancialTransaction, PaymentSubmission } from '../types';
 
 interface UserManagementProps {
   currentUser: User;
   users: User[];
+  warga?: Warga[];
+  transactions?: FinancialTransaction[];
+  submissions?: PaymentSubmission[];
   onAddUser: (newUser: User) => void;
   onUpdateUser: (updatedUser: User) => void;
   onDeleteUser: (userId: string) => void;
 }
 
+const ALL_MONTHS_2026 = [
+  'Januari 2026', 'Februari 2026', 'Maret 2026', 'April 2026',
+  'Mei 2026', 'Juni 2026', 'Juli 2026', 'Agustus 2026',
+  'September 2026', 'Oktober 2026', 'November 2026', 'Desember 2026'
+];
+
 export default function UserManagement({ 
   currentUser, 
   users, 
+  warga = [],
+  transactions = [],
+  submissions = [],
   onAddUser, 
   onUpdateUser, 
   onDeleteUser 
 }: UserManagementProps) {
+  const [selectedUserForCard, setSelectedUserForCard] = useState<User | null>(null);
   
+  // Helper function to calculate payment status for any User account
+  const getUserPaymentInfo = (userAcc: User) => {
+    if (userAcc.role === 'admin') {
+      return { status: 'Admin System', paidCount: 0, badgeClass: 'bg-purple-950/60 text-purple-400 border-purple-500/30' };
+    }
+
+    const matchedWarga = warga.find(
+      w => w.id === userAcc.id ||
+           (w.username && w.username.toLowerCase() === userAcc.username.toLowerCase()) ||
+           w.fullName.toLowerCase().trim() === userAcc.fullName.toLowerCase().trim()
+    );
+
+    const paidSet = new Set<string>();
+    if (matchedWarga?.paidMonths) {
+      matchedWarga.paidMonths.forEach(m => paidSet.add(m));
+    }
+
+    const uName = userAcc.fullName.toLowerCase().trim();
+    const uUser = userAcc.username.toLowerCase().trim();
+    const uId = userAcc.id;
+
+    transactions.forEach(t => {
+      if (t.type === 'Pemasukan') {
+        const txWName = t.wargaName?.trim().toLowerCase() || '';
+        const txWId = t.wargaId;
+
+        const isMatch = (
+          (uId && txWId && txWId === uId) ||
+          txWName === uName ||
+          txWName === uUser ||
+          txWName === uId
+        );
+
+        if (isMatch) {
+          if (t.paidMonths) {
+            t.paidMonths.forEach(m => paidSet.add(m));
+          }
+          ALL_MONTHS_2026.forEach(m => {
+            const shortM = m.replace(' 2026', '').toLowerCase();
+            if (t.description.toLowerCase().includes(shortM)) {
+              paidSet.add(m);
+            }
+          });
+        }
+      }
+    });
+
+    submissions.forEach(s => {
+      if (s.status === 'Approved') {
+        const subName = s.wargaName?.trim().toLowerCase() || '';
+        const subUser = s.submittedBy?.trim().toLowerCase() || '';
+        const subId = s.wargaId;
+
+        const isMatch = (
+          (uId && subId && subId === uId) ||
+          subName === uName ||
+          subName === uUser ||
+          subUser === uUser ||
+          subName === uId
+        );
+
+        if (isMatch && s.paidMonths) {
+          s.paidMonths.forEach(m => paidSet.add(m));
+        }
+      }
+    });
+
+    const isPending = submissions.some(s => {
+      if (s.status !== 'Pending') return false;
+      const subName = s.wargaName?.trim().toLowerCase() || '';
+      const subUser = s.submittedBy?.trim().toLowerCase() || '';
+      const subId = s.wargaId;
+
+      return (
+        (uId && subId && subId === uId) ||
+        subName === uName ||
+        subName === uUser ||
+        subUser === uUser ||
+        subName === uId
+      );
+    });
+
+    let maxPaidIdx = -1;
+    ALL_MONTHS_2026.forEach((m, idx) => {
+      if (paidSet.has(m)) {
+        if (idx > maxPaidIdx) maxPaidIdx = idx;
+      }
+    });
+
+    const currentMonthIdx = Math.min(Math.max(new Date().getMonth(), 0), 11);
+    const paidCount = paidSet.size;
+
+    if (isPending) {
+      return { status: 'Verifikasi Pending', paidCount, badgeClass: 'bg-amber-500/10 text-amber-400 border-amber-500/30 font-bold' };
+    }
+    if (maxPaidIdx >= currentMonthIdx) {
+      return { status: 'Lunas', paidCount, badgeClass: 'bg-emerald-950/80 text-emerald-300 border-emerald-500/30 font-bold' };
+    }
+    return { status: 'Menunggak', paidCount, badgeClass: 'bg-rose-950/80 text-rose-300 border-rose-500/30 font-bold' };
+  };
+
   // Guard check
   if (currentUser.role !== 'RT' && currentUser.role !== 'admin') {
     return (
@@ -432,6 +546,7 @@ export default function UserManagement({
                   <th className="px-4 py-3.5 font-bold">Username</th>
                   <th className="px-4 py-3.5 font-bold text-center whitespace-nowrap min-w-[100px]">Blok Rumah</th>
                   <th className="px-4 py-3.5 font-bold text-center">Role / Jabatan</th>
+                  <th className="px-4 py-3.5 font-bold text-center whitespace-nowrap">Status Pembayaran</th>
                   <th className="px-4 py-3.5 font-bold text-center font-mono">
                     <button
                       type="button"
@@ -481,6 +596,25 @@ export default function UserManagement({
                         <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider ${roleColor}`}>
                           {u.role}
                         </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                        {(() => {
+                          const payInfo = getUserPaymentInfo(u);
+                          if (u.role === 'admin') {
+                            return <span className="text-[10px] text-slate-500 font-mono">-</span>;
+                          }
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedUserForCard(u)}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] border cursor-pointer transition-transform hover:scale-105 ${payInfo.badgeClass}`}
+                              title="Klik untuk lihat Kartu & Histori Pembayaran Akun Ini"
+                            >
+                              <span>{payInfo.status}</span>
+                              <span className="font-mono opacity-80">({payInfo.paidCount}/12)</span>
+                            </button>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3.5 text-center font-mono text-slate-400 font-bold tracking-widest">
                         {showTablePasswords ? u.passwordHash : '••••••••'}
@@ -658,6 +792,159 @@ export default function UserManagement({
           </div>
         </div>
       )}
+
+      {/* MODAL: View Account Payment Card */}
+      {selectedUserForCard && (() => {
+        const payInfo = getUserPaymentInfo(selectedUserForCard);
+        
+        // Find paid months for matrix
+        const uName = selectedUserForCard.fullName.toLowerCase().trim();
+        const uUser = selectedUserForCard.username.toLowerCase().trim();
+        const uId = selectedUserForCard.id;
+
+        const paidSet = new Set<string>();
+        const pendingSet = new Set<string>();
+
+        const matchedWarga = warga.find(w => w.id === uId || (w.username && w.username.toLowerCase() === uUser) || w.fullName.toLowerCase().trim() === uName);
+        if (matchedWarga?.paidMonths) {
+          matchedWarga.paidMonths.forEach(m => paidSet.add(m));
+        }
+
+        transactions.forEach(t => {
+          if (t.type === 'Pemasukan') {
+            const txWName = t.wargaName?.trim().toLowerCase() || '';
+            const txWId = t.wargaId;
+            const isMatch = (uId && txWId && txWId === uId) || txWName === uName || txWName === uUser || txWName === uId;
+            if (isMatch) {
+              if (t.paidMonths) t.paidMonths.forEach(m => paidSet.add(m));
+              ALL_MONTHS_2026.forEach(m => {
+                const shortM = m.replace(' 2026', '').toLowerCase();
+                if (t.description.toLowerCase().includes(shortM)) paidSet.add(m);
+              });
+            }
+          }
+        });
+
+        submissions.forEach(s => {
+          const subName = s.wargaName?.trim().toLowerCase() || '';
+          const subUser = s.submittedBy?.trim().toLowerCase() || '';
+          const subId = s.wargaId;
+          const isMatch = (uId && subId && subId === uId) || subName === uName || subName === uUser || subUser === uUser || subName === uId;
+          if (isMatch) {
+            if (s.status === 'Approved' && s.paidMonths) s.paidMonths.forEach(m => paidSet.add(m));
+            if (s.status === 'Pending' && s.paidMonths) s.paidMonths.forEach(m => pendingSet.add(m));
+          }
+        });
+
+        // Get account transactions
+        const accountTxs = transactions.filter(t => {
+          if (t.type !== 'Pemasukan') return false;
+          const txWName = t.wargaName?.trim().toLowerCase() || '';
+          const txWId = t.wargaId;
+          return (uId && txWId && txWId === uId) || txWName === uName || txWName === uUser || txWName === uId;
+        });
+
+        const accountSubmissions = submissions.filter(s => {
+          const subName = s.wargaName?.trim().toLowerCase() || '';
+          const subUser = s.submittedBy?.trim().toLowerCase() || '';
+          const subId = s.wargaId;
+          return (uId && subId && subId === uId) || subName === uName || subName === uUser || subUser === uUser || subName === uId;
+        });
+
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 flex items-start justify-center pt-4 sm:pt-10 p-4 z-50 animate-fadeIn backdrop-blur-md overflow-y-auto">
+            <div className="bg-slate-900 border border-amber-500/30 rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative my-auto sm:my-0">
+              <button
+                onClick={() => setSelectedUserForCard(null)}
+                className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-full bg-slate-800 border border-slate-700 transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+
+              <div className="flex items-center gap-3 border-b border-slate-800 pb-4 mb-5">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0 font-black text-lg">
+                  @{selectedUserForCard.username.substring(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">{selectedUserForCard.fullName}</h3>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-amber-400 font-mono font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                      Blok {selectedUserForCard.blok}
+                    </span>
+                    <span className="text-xs text-slate-400 font-mono">@{selectedUserForCard.username}</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${payInfo.badgeClass}`}>
+                      {payInfo.status} ({payInfo.paidCount}/12 Bulan)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Matrix 2026 */}
+              <div className="space-y-3 mb-6">
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Matriks Pembayaran Iuran 2026</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {ALL_MONTHS_2026.map(m => {
+                    const isPaid = paidSet.has(m);
+                    const isPending = pendingSet.has(m);
+                    const monthShort = m.replace(' 2026', '');
+
+                    let bgClass = 'bg-slate-950/80 border-slate-800/80 text-slate-500';
+                    let statusLabel = 'Belum Lunas';
+
+                    if (isPaid) {
+                      bgClass = 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 font-bold';
+                      statusLabel = 'Lunas';
+                    } else if (isPending) {
+                      bgClass = 'bg-amber-950/60 border-amber-500/40 text-amber-300 font-bold';
+                      statusLabel = 'Verifikasi';
+                    }
+
+                    return (
+                      <div key={m} className={`p-2.5 rounded-xl border text-center transition-all ${bgClass}`}>
+                        <p className="text-[11px] font-bold">{monthShort}</p>
+                        <p className="text-[9px] uppercase tracking-wider opacity-80 mt-0.5">{statusLabel}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Transactions History */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Histori Setoran Terkoneksi ({accountTxs.length + accountSubmissions.length} Transaksi)</h4>
+                {accountTxs.length === 0 && accountSubmissions.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic p-4 bg-slate-950 rounded-xl text-center">Belum ada catatan transaksi pembayaran untuk akun ini.</p>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {accountSubmissions.map(s => (
+                      <div key={s.id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs flex justify-between items-center">
+                        <div>
+                          <p className="font-bold text-white">{s.paidMonths.join(', ')}</p>
+                          <p className="text-[10px] text-slate-400">{s.date} • Pengajuan Online</p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${s.status === 'Approved' ? 'bg-emerald-950 text-emerald-400 border-emerald-500/30' : s.status === 'Pending' ? 'bg-amber-950 text-amber-400 border-amber-500/30' : 'bg-red-950 text-red-400 border-red-500/30'}`}>
+                          {s.status}
+                        </span>
+                      </div>
+                    ))}
+                    {accountTxs.map(t => (
+                      <div key={t.id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs flex justify-between items-center">
+                        <div>
+                          <p className="font-bold text-emerald-400">{t.description}</p>
+                          <p className="text-[10px] text-slate-400">{t.date} • Kas RT</p>
+                        </div>
+                        <span className="font-mono font-bold text-emerald-400 text-xs">
+                          Rp {t.amount.toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

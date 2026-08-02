@@ -14,15 +14,30 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
-import { User, FamilyMember } from '../types';
+import { User, FamilyMember, Warga, FinancialTransaction, PaymentSubmission } from '../types';
 import { calculateAge } from '../data/initialData';
 
 interface MyProfileProps {
   currentUser: User;
+  warga?: Warga[];
+  transactions?: FinancialTransaction[];
+  submissions?: PaymentSubmission[];
   onUpdateUser: (updatedUser: User) => void;
 }
 
-export default function MyProfile({ currentUser, onUpdateUser }: MyProfileProps) {
+const ALL_MONTHS_2026 = [
+  'Januari 2026', 'Februari 2026', 'Maret 2026', 'April 2026',
+  'Mei 2026', 'Juni 2026', 'Juli 2026', 'Agustus 2026',
+  'September 2026', 'Oktober 2026', 'November 2026', 'Desember 2026'
+];
+
+export default function MyProfile({ 
+  currentUser, 
+  warga = [],
+  transactions = [],
+  submissions = [],
+  onUpdateUser 
+}: MyProfileProps) {
   // Form minimize toggle states (default minimized as requested)
   const [isPersonalDataOpen, setIsPersonalDataOpen] = useState(false);
   const [isAddFamilyOpen, setIsAddFamilyOpen] = useState(false);
@@ -477,6 +492,171 @@ export default function MyProfile({ currentUser, onUpdateUser }: MyProfileProps)
         </div>
 
       </div>
+
+      {/* Connected Payment Card Section */}
+      {(() => {
+        if (currentUser.role === 'admin') return null;
+
+        const uName = currentUser.fullName.toLowerCase().trim();
+        const uUser = currentUser.username.toLowerCase().trim();
+        const uId = currentUser.id;
+
+        const paidSet = new Set<string>();
+        const pendingSet = new Set<string>();
+
+        const matchedWarga = warga.find(w => w.id === uId || (w.username && w.username.toLowerCase() === uUser) || w.fullName.toLowerCase().trim() === uName);
+        if (matchedWarga?.paidMonths) {
+          matchedWarga.paidMonths.forEach(m => paidSet.add(m));
+        }
+
+        transactions.forEach(t => {
+          if (t.type === 'Pemasukan') {
+            const txWName = t.wargaName?.trim().toLowerCase() || '';
+            const txWId = t.wargaId;
+            const isMatch = (uId && txWId && txWId === uId) || txWName === uName || txWName === uUser || txWName === uId;
+            if (isMatch) {
+              if (t.paidMonths) t.paidMonths.forEach(m => paidSet.add(m));
+              ALL_MONTHS_2026.forEach(m => {
+                const shortM = m.replace(' 2026', '').toLowerCase();
+                if (t.description.toLowerCase().includes(shortM)) paidSet.add(m);
+              });
+            }
+          }
+        });
+
+        submissions.forEach(s => {
+          const subName = s.wargaName?.trim().toLowerCase() || '';
+          const subUser = s.submittedBy?.trim().toLowerCase() || '';
+          const subId = s.wargaId;
+          const isMatch = (uId && subId && subId === uId) || subName === uName || subName === uUser || subUser === uUser || subName === uId;
+          if (isMatch) {
+            if (s.status === 'Approved' && s.paidMonths) s.paidMonths.forEach(m => paidSet.add(m));
+            if (s.status === 'Pending' && s.paidMonths) s.paidMonths.forEach(m => pendingSet.add(m));
+          }
+        });
+
+        const myTxs = transactions.filter(t => {
+          if (t.type !== 'Pemasukan') return false;
+          const txWName = t.wargaName?.trim().toLowerCase() || '';
+          const txWId = t.wargaId;
+          return (uId && txWId && txWId === uId) || txWName === uName || txWName === uUser || txWName === uId;
+        });
+
+        const mySubmissions = submissions.filter(s => {
+          const subName = s.wargaName?.trim().toLowerCase() || '';
+          const subUser = s.submittedBy?.trim().toLowerCase() || '';
+          const subId = s.wargaId;
+          return (uId && subId && subId === uId) || subName === uName || subName === uUser || subUser === uUser || subName === uId;
+        });
+
+        const currentMonthIdx = Math.min(Math.max(new Date().getMonth(), 0), 11);
+        let maxPaidIdx = -1;
+        ALL_MONTHS_2026.forEach((m, idx) => {
+          if (paidSet.has(m) && idx > maxPaidIdx) maxPaidIdx = idx;
+        });
+
+        let statusText = 'Lunas';
+        let badgeStyle = 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40';
+
+        if (pendingSet.size > 0) {
+          statusText = 'Pending Verifikasi';
+          badgeStyle = 'bg-amber-950/80 text-amber-300 border-amber-500/40';
+        } else if (maxPaidIdx < currentMonthIdx) {
+          statusText = 'Menunggak';
+          badgeStyle = 'bg-rose-950/80 text-rose-300 border-rose-500/40';
+        }
+
+        return (
+          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 mt-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                  <CheckCircle size={18} className="text-amber-400" />
+                  <span>Kartu & Status Pembayaran Iuran Akun Saya</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Status iuran terkoneksi otomatis dengan akun @{currentUser.username} (Blok {currentUser.blok})
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`px-3 py-1 rounded-full text-xs font-bold border ${badgeStyle}`}>
+                  {statusText}
+                </span>
+                <span className="text-xs font-mono font-bold text-amber-400 bg-slate-950 px-3 py-1 rounded-full border border-slate-800">
+                  {paidSet.size}/12 Bulan
+                </span>
+              </div>
+            </div>
+
+            {/* Matrix 2026 */}
+            <div>
+              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Matriks Setoran 2026</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                {ALL_MONTHS_2026.map(m => {
+                  const isPaid = paidSet.has(m);
+                  const isPending = pendingSet.has(m);
+                  const shortM = m.replace(' 2026', '');
+
+                  let cardClass = 'bg-slate-950/80 border-slate-800 text-slate-500';
+                  let status = 'Belum Lunas';
+
+                  if (isPaid) {
+                    cardClass = 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 font-bold';
+                    status = 'Lunas';
+                  } else if (isPending) {
+                    cardClass = 'bg-amber-950/60 border-amber-500/40 text-amber-300 font-bold';
+                    status = 'Verifikasi';
+                  }
+
+                  return (
+                    <div key={m} className={`p-2.5 rounded-xl border text-center transition-all ${cardClass}`}>
+                      <p className="text-[11px] font-bold">{shortM}</p>
+                      <p className="text-[9px] uppercase tracking-wider opacity-80 mt-0.5">{status}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Transaction List */}
+            <div className="pt-2">
+              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">
+                Histori Transaksi Account Saya ({myTxs.length + mySubmissions.length})
+              </h4>
+              {myTxs.length === 0 && mySubmissions.length === 0 ? (
+                <p className="text-xs text-slate-500 italic p-4 bg-slate-950 rounded-xl text-center border border-slate-800/60">
+                  Belum ada catatan setoran iuran terverifikasi untuk akun Anda.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {mySubmissions.map(s => (
+                    <div key={s.id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs flex justify-between items-center">
+                      <div>
+                        <p className="font-bold text-white">Iuran {s.paidMonths.join(', ')}</p>
+                        <p className="text-[10px] text-slate-400">{s.date} • Pengajuan Online</p>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold border ${s.status === 'Approved' ? 'bg-emerald-950 text-emerald-400 border-emerald-500/30' : s.status === 'Pending' ? 'bg-amber-950 text-amber-400 border-amber-500/30' : 'bg-red-950 text-red-400 border-red-500/30'}`}>
+                        {s.status}
+                      </span>
+                    </div>
+                  ))}
+                  {myTxs.map(t => (
+                    <div key={t.id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs flex justify-between items-center">
+                      <div>
+                        <p className="font-bold text-emerald-400">{t.description}</p>
+                        <p className="text-[10px] text-slate-400">{t.date} • Kas RT Direct</p>
+                      </div>
+                      <span className="font-mono font-bold text-emerald-400 text-xs">
+                        Rp {t.amount.toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );
