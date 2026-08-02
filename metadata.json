@@ -1,0 +1,8 @@
+{
+  "name": "CMS04",
+  "description": "Portal Administrasi Warga \u0026 Kas Keuangan CMS RT04 digital cerdas, praktis, dan transparan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
