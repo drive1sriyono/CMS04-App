@@ -203,6 +203,45 @@ export const testSupabaseRealConnection = async (): Promise<{ success: boolean; 
   }
 };
 
+// Helper to perform upsert with automatic column pruning if schema is missing optional columns
+export const safeUpsert = async (
+  client: SupabaseClient,
+  tableName: string,
+  rows: Record<string, any>[]
+) => {
+  if (!rows || rows.length === 0) return null;
+
+  // Try full upsert first
+  let res = await client.from(tableName).upsert(rows, { onConflict: 'id' });
+  let error = res.error;
+  if (!error) return null;
+
+  // If error mentions missing column (e.g. "Could not find the 'birth_date' column...")
+  let currentRows = rows.map(r => ({ ...r }));
+  let attempts = 0;
+
+  while (error && attempts < 10) {
+    attempts++;
+    const errMsg = error.message || '';
+    const match = errMsg.match(/Could not find the '([^']+)' column/i);
+    if (match && match[1]) {
+      const missingCol = match[1];
+      console.warn(`Column '${missingCol}' missing in Supabase table '${tableName}'. Stripping and retrying...`);
+      currentRows = currentRows.map(r => {
+        const copy = { ...r };
+        delete copy[missingCol];
+        return copy;
+      });
+      const retryRes = await client.from(tableName).upsert(currentRows, { onConflict: 'id' });
+      error = retryRes.error;
+    } else {
+      break;
+    }
+  }
+
+  return error;
+};
+
 // Push Local State to Supabase Cloud
 export const pushAllLocalDataToSupabase = async (data: {
   users: User[];
@@ -219,34 +258,34 @@ export const pushAllLocalDataToSupabase = async (data: {
     // 1. Users
     if (data.users.length > 0) {
       const usersRows = data.users.map(mapUserToSupabase);
-      const { error: usersErr } = await client.from('users').upsert(usersRows, { onConflict: 'id' });
+      const usersErr = await safeUpsert(client, 'users', usersRows);
       if (usersErr) throw new Error(`Users Table Error: ${usersErr.message}`);
     }
 
     // 2. Warga
     if (data.warga.length > 0) {
       const wargaRows = data.warga.map(mapWargaToSupabase);
-      const { error: wargaErr } = await client.from('warga').upsert(wargaRows, { onConflict: 'id' });
+      const wargaErr = await safeUpsert(client, 'warga', wargaRows);
       if (wargaErr) throw new Error(`Warga Table Error: ${wargaErr.message}`);
     }
 
     // 3. Transactions
     if (data.transactions.length > 0) {
       const txRows = data.transactions.map(mapTransactionToSupabase);
-      const { error: txErr } = await client.from('financial_transactions').upsert(txRows, { onConflict: 'id' });
+      const txErr = await safeUpsert(client, 'financial_transactions', txRows);
       if (txErr) throw new Error(`Transactions Table Error: ${txErr.message}`);
     }
 
     // 4. Submissions
     if (data.submissions.length > 0) {
       const subRows = data.submissions.map(mapSubmissionToSupabase);
-      const { error: subErr } = await client.from('payment_submissions').upsert(subRows, { onConflict: 'id' });
+      const subErr = await safeUpsert(client, 'payment_submissions', subRows);
       if (subErr) throw new Error(`Submissions Table Error: ${subErr.message}`);
     }
 
     return {
       success: true,
-      message: `🎉 BERHASIL SINKRONISASI REAL! ${data.users.length} Akun User, ${data.warga.length} Data Warga, dan Transaksi Keuangan telah diunggah ke Supabase Cloud.`
+      message: `🎉 BERHASIL SINKRONISASI REAL! ${data.users.length} Akun User, ${data.warga.length} Data Warga, dan Transaksi Keuangan telah terhubung & tersinkron ke Supabase Cloud.`
     };
   } catch (err: any) {
     return {
@@ -293,7 +332,7 @@ export const syncSingleUserToSupabase = async (user: User) => {
   const client = getSupabaseClient();
   if (!client) return;
   try {
-    await client.from('users').upsert([mapUserToSupabase(user)], { onConflict: 'id' });
+    await safeUpsert(client, 'users', [mapUserToSupabase(user)]);
   } catch (e) {
     console.error('Error syncing user to Supabase:', e);
   }

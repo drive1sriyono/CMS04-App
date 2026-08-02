@@ -416,52 +416,97 @@ export default function BackupRestore({
           </div>
           <button
             onClick={() => {
-              const sql = `-- SCHEMA CMS04 RT DIGITAL FOR SUPABASE
+              const sql = `-- SCHEMA CMS04 RT DIGITAL FOR SUPABASE WITH AUTO-MIGRATION
+
+-- 1. TABEL WARGA
 CREATE TABLE IF NOT EXISTS public.warga (
   id TEXT PRIMARY KEY,
   full_name TEXT NOT NULL,
-  nik TEXT,
-  phone TEXT,
-  address_block TEXT,
+  username TEXT,
+  blok TEXT,
   house_status TEXT DEFAULT 'Pemilik',
-  family_members INTEGER DEFAULT 1,
-  is_active BOOLEAN DEFAULT true,
+  phone TEXT,
+  status_iuran TEXT DEFAULT 'Lunas',
   birth_date DATE,
+  paid_months TEXT DEFAULT '[]',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+ALTER TABLE public.warga ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE public.warga ADD COLUMN IF NOT EXISTS blok TEXT;
+ALTER TABLE public.warga ADD COLUMN IF NOT EXISTS house_status TEXT DEFAULT 'Pemilik';
+ALTER TABLE public.warga ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.warga ADD COLUMN IF NOT EXISTS status_iuran TEXT DEFAULT 'Lunas';
+ALTER TABLE public.warga ADD COLUMN IF NOT EXISTS birth_date DATE;
+ALTER TABLE public.warga ADD COLUMN IF NOT EXISTS paid_months TEXT DEFAULT '[]';
+
+-- 2. TABEL USERS
 CREATE TABLE IF NOT EXISTS public.users (
   id TEXT PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL,
-  warga_id TEXT REFERENCES public.warga(id) ON DELETE SET NULL,
+  full_name TEXT,
+  blok TEXT,
+  house_status TEXT DEFAULT 'Pemilik',
+  phone TEXT,
+  birth_date DATE,
+  family TEXT DEFAULT '[]',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS blok TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS house_status TEXT DEFAULT 'Pemilik';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS birth_date DATE;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS family TEXT DEFAULT '[]';
+
+-- 3. TABEL FINANCIAL_TRANSACTIONS
 CREATE TABLE IF NOT EXISTS public.financial_transactions (
   id TEXT PRIMARY KEY,
-  type TEXT NOT NULL CHECK (type IN ('INCOME', 'EXPENSE')),
+  type TEXT NOT NULL,
+  warga_name TEXT,
+  recipient TEXT,
   amount NUMERIC NOT NULL,
-  category TEXT NOT NULL,
-  date DATE NOT NULL,
+  date TEXT NOT NULL,
   description TEXT,
   proof_image TEXT,
-  created_by TEXT,
+  paid_months TEXT DEFAULT '[]',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+ALTER TABLE public.financial_transactions ADD COLUMN IF NOT EXISTS warga_name TEXT;
+ALTER TABLE public.financial_transactions ADD COLUMN IF NOT EXISTS recipient TEXT;
+ALTER TABLE public.financial_transactions ADD COLUMN IF NOT EXISTS paid_months TEXT DEFAULT '[]';
+
+-- 4. TABEL PAYMENT_SUBMISSIONS
 CREATE TABLE IF NOT EXISTS public.payment_submissions (
   id TEXT PRIMARY KEY,
-  warga_id TEXT NOT NULL REFERENCES public.warga(id) ON DELETE CASCADE,
-  month TEXT NOT NULL,
-  year INTEGER NOT NULL,
+  warga_id TEXT,
+  warga_name TEXT,
+  blok TEXT,
   amount NUMERIC NOT NULL,
+  date TEXT NOT NULL,
+  paid_months TEXT DEFAULT '[]',
   proof_image TEXT,
-  status TEXT DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
-  submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  approved_at TIMESTAMP WITH TIME ZONE
+  status TEXT DEFAULT 'PENDING',
+  submitted_by TEXT,
+  submitted_at TEXT NOT NULL,
+  rejection_reason TEXT,
+  reviewed_by TEXT,
+  reviewed_at TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+ALTER TABLE public.payment_submissions ADD COLUMN IF NOT EXISTS warga_id TEXT;
+ALTER TABLE public.payment_submissions ADD COLUMN IF NOT EXISTS warga_name TEXT;
+ALTER TABLE public.payment_submissions ADD COLUMN IF NOT EXISTS blok TEXT;
+ALTER TABLE public.payment_submissions ADD COLUMN IF NOT EXISTS paid_months TEXT DEFAULT '[]';
+ALTER TABLE public.payment_submissions ADD COLUMN IF NOT EXISTS submitted_by TEXT;
+ALTER TABLE public.payment_submissions ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+ALTER TABLE public.payment_submissions ADD COLUMN IF NOT EXISTS reviewed_by TEXT;
+ALTER TABLE public.payment_submissions ADD COLUMN IF NOT EXISTS reviewed_at TEXT;
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.warga ENABLE ROW LEVEL SECURITY;
