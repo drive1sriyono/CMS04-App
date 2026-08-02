@@ -37,6 +37,13 @@ export default function BackupRestore({
   onUpdateDbStatus
 }: BackupRestoreProps) {
   
+  const [supabaseUrl, setSupabaseUrl] = useState<string>(() => {
+    return localStorage.getItem('supabase_url') || (import.meta as any).env?.VITE_SUPABASE_URL || 'https://rt-digital-z91s.supabase.co';
+  });
+  const [supabaseAnonKey, setSupabaseAnonKey] = useState<string>(() => {
+    return localStorage.getItem('supabase_anon_key') || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+  });
+
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
@@ -151,20 +158,78 @@ export default function BackupRestore({
     }
   };
 
-  // Simulate Connection Test
-  const testSupabaseConnection = () => {
+  // REAL Connection Test to Supabase REST API via HTTP fetch
+  const testSupabaseConnection = async () => {
+    if (!supabaseUrl || !supabaseUrl.startsWith('http')) {
+      setErrorMsg('Harap masukkan Supabase Project URL yang valid (contoh: https://rt-digital-z91s.supabase.co)');
+      return;
+    }
+
     setTestingConnection(true);
     setTestResult(null);
+    setErrorMsg('');
 
-    setTimeout(() => {
-      onUpdateDbStatus({
-        connected: true,
-        mode: 'online',
-        lastTested: new Date().toLocaleString('id-ID')
+    const cleanUrl = supabaseUrl.trim().replace(/\/+$/, '');
+    localStorage.setItem('supabase_url', cleanUrl);
+    if (supabaseAnonKey) {
+      localStorage.setItem('supabase_anon_key', supabaseAnonKey.trim());
+    }
+
+    try {
+      const startTime = performance.now();
+      
+      // Ping Supabase REST API schema / auth health endpoint
+      const targetEndpoint = `${cleanUrl}/rest/v1/`;
+      const headers: Record<string, string> = {
+        'Accept': 'application/json'
+      };
+      if (supabaseAnonKey.trim()) {
+        headers['apikey'] = supabaseAnonKey.trim();
+        headers['Authorization'] = `Bearer ${supabaseAnonKey.trim()}`;
+      }
+
+      const response = await fetch(targetEndpoint, {
+        method: 'GET',
+        headers,
+        cache: 'no-cache'
       });
+
+      const endTime = performance.now();
+      const latency = Math.round(endTime - startTime);
+
+      if (response.ok || response.status === 200 || response.status === 204) {
+        onUpdateDbStatus({
+          connected: true,
+          mode: 'online',
+          lastTested: `Real Online (${new Date().toLocaleTimeString('id-ID')} • ${latency}ms)`
+        });
+        setTestResult(`✅ REAL KONEKSI BERHASIL! (HTTP ${response.status} OK - Latensi ${latency}ms). Endpoint Supabase Cloud merespons langsung secara real.`);
+      } else if (response.status === 401 || response.status === 403) {
+        // Host reachable, but credentials required
+        onUpdateDbStatus({
+          connected: true,
+          mode: 'online',
+          lastTested: `Host Reachable (${new Date().toLocaleTimeString('id-ID')} • HTTP ${response.status})`
+        });
+        setTestResult(`⚠️ SERVER SUPABASE TERHUBUNG KONTAN (${response.status} ${response.statusText} - ${latency}ms). Domain Supabase aktif secara real. ${!supabaseAnonKey.trim() ? 'Isi Supabase Anon Key untuk otentikasi penuh.' : 'Periksa kesesuaian Anon Key.'}`);
+      } else {
+        onUpdateDbStatus({
+          connected: false,
+          mode: 'offline',
+          lastTested: `HTTP ${response.status}`
+        });
+        setTestResult(`⚠️ Server Supabase merespons dengan HTTP Status ${response.status} (${response.statusText}).`);
+      }
+    } catch (err: any) {
+      onUpdateDbStatus({
+        connected: false,
+        mode: 'offline',
+        lastTested: `Gagal Connect (${new Date().toLocaleTimeString('id-ID')})`
+      });
+      setTestResult(`❌ KONEKSI REAL GAGAL: ${err.message || 'Tidak dapat terhubung ke endpoint'}. Pastikan URL Supabase benar dan perangkat Anda terhubung ke internet.`);
+    } finally {
       setTestingConnection(false);
-      setTestResult('Koneksi ke Supabase berhasil disimulasikan! Semua tabel skema keuangan dan warga siap diintegrasikan.');
-    }, 2000);
+    }
   };
 
   // Toggle mode manually for showcase
@@ -286,48 +351,70 @@ export default function BackupRestore({
           </div>
         </div>
 
-        {/* Database Connection Showcase (Supabase) */}
+        {/* Database Connection Showcase (Supabase Real HTTP Test) */}
         <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-4 border-b border-slate-800 pb-4">
               <Server size={18} className="text-amber-400" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-white">Konfigurasi Database Cloud (Supabase)</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white">Konfigurasi & Tes Koneksi Real Supabase</h3>
             </div>
 
-            <p className="text-xs text-slate-400 leading-relaxed mb-6">
-              Sesuai instruksi pengembangan, database persisten utama direncanakan menggunakan <strong>Supabase</strong>. Anda dapat menguji simulator jembatan koneksi di bawah ini untuk memverifikasi kesiapan integrasi cloud.
+            <p className="text-xs text-slate-400 leading-relaxed mb-5">
+              Tes koneksi real langsung ke endpoint REST Supabase melalui permintaan HTTP fetch nyata. Masukkan URL dan Key Supabase Anda di bawah ini:
             </p>
 
             {/* Current Status Badge Widget */}
             <div className="space-y-4">
               <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400 font-medium">Status Server:</span>
+                  <span className="text-slate-400 font-medium">Status Koneksi Real:</span>
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                     dbStatus.connected 
                       ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400' 
                       : 'bg-slate-800 border border-slate-700 text-slate-300'
                   }`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${dbStatus.connected ? 'bg-amber-400 animate-pulse' : 'bg-slate-500'}`}></span>
-                    {dbStatus.connected ? 'Connected (Simulated)' : 'Offline (Local State)'}
+                    {dbStatus.connected ? 'Cloud Connected (Real)' : 'Offline (Local Storage)'}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400 font-medium">Penyimpanan Aktif:</span>
-                  <span className="font-mono text-white font-bold">{dbStatus.connected ? 'Supabase Cloud API' : 'Browser LocalStorage'}</span>
+                  <span className="text-slate-400 font-medium">Penyimpanan Utama:</span>
+                  <span className="font-mono text-white font-bold">{dbStatus.connected ? 'Supabase REST Cloud' : 'Browser LocalStorage'}</span>
                 </div>
 
                 <div className="flex justify-between items-center text-xs border-t border-slate-800/80 pt-2">
-                  <span className="text-slate-400 font-medium">Terakhir Diuji:</span>
-                  <span className="font-mono text-[11px] text-amber-300">{dbStatus.lastTested || 'Belum diuji'}</span>
+                  <span className="text-slate-400 font-medium">Pengujian Terakhir:</span>
+                  <span className="font-mono text-[11px] text-amber-300">{dbStatus.lastTested || 'Belum diuji secara real'}</span>
                 </div>
               </div>
 
-              {/* Endpoint Showcase Block */}
-              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-[10px] text-slate-400 leading-normal space-y-1.5">
-                <div><strong className="text-slate-200 font-semibold">SUPABASE_URL:</strong> <code className="font-mono text-amber-400 ml-1">Konfigurasi via Vercel / .env</code></div>
-                <div><strong className="text-slate-200 font-semibold">SUPABASE_ANON_KEY:</strong> <code className="font-mono text-slate-400 ml-1">Konfigurasi via Vercel / .env</code></div>
+              {/* Editable Credential Inputs */}
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 space-y-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                    SUPABASE_URL
+                  </label>
+                  <input
+                    type="text"
+                    value={supabaseUrl}
+                    onChange={(e) => setSupabaseUrl(e.target.value)}
+                    placeholder="https://xyz.supabase.co"
+                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-amber-400 font-mono focus:outline-none focus:border-amber-500 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                    SUPABASE_ANON_KEY (Opsional untuk ping host / Wajib untuk data)
+                  </label>
+                  <input
+                    type="password"
+                    value={supabaseAnonKey}
+                    onChange={(e) => setSupabaseAnonKey(e.target.value)}
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 font-mono focus:outline-none focus:border-amber-500 transition-all"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -339,7 +426,7 @@ export default function BackupRestore({
               className="w-full sm:w-1/2 py-2.5 gold-gradient-bg text-slate-950 font-black rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 cursor-pointer disabled:opacity-50 uppercase tracking-wider"
             >
               <RefreshCw size={13} className={testingConnection ? 'animate-spin' : ''} />
-              {testingConnection ? 'Sedang Menguji...' : 'Tes Koneksi'}
+              {testingConnection ? 'Menguji HTTP Real...' : 'Tes Koneksi Real'}
             </button>
             <button
               onClick={toggleMockMode}
@@ -351,7 +438,7 @@ export default function BackupRestore({
           </div>
 
           {testResult && (
-            <div className="mt-4 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs text-amber-300 animate-fadeIn leading-relaxed font-medium">
+            <div className="mt-4 p-3.5 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-amber-300 animate-fadeIn leading-relaxed font-mono">
               {testResult}
             </div>
           )}

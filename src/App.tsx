@@ -12,8 +12,9 @@ import {
   Sparkles
 } from 'lucide-react';
 
-// Import Logo Component
+// Import Components
 import Cms04Logo from './components/Cms04Logo';
+import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 
 // Import Types
 import { User, Warga, FinancialTransaction, PaymentSubmission, DatabaseStatus } from './types';
@@ -442,22 +443,25 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
       
       {/* Top Mobile Bar (Hidden in desktop) */}
-      <header className="md:hidden bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-xl">
-        <div className="flex items-center gap-2.5">
-          <Cms04Logo size={34} />
+      <header className="md:hidden bg-slate-900 border-b border-slate-800 px-3.5 py-2.5 flex items-center justify-between sticky top-0 z-40 shadow-xl">
+        <div className="flex items-center gap-2">
+          <Cms04Logo size={32} />
           <div>
             <span className="font-black text-white text-base tracking-tight block leading-tight">CMS04</span>
-            <span className="text-[9px] text-amber-400 font-bold tracking-widest block uppercase">CMS RT04</span>
+            <span className="text-[8px] text-amber-400 font-bold tracking-widest block uppercase">CMS RT04 PWA</span>
           </div>
         </div>
         
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 text-amber-400 hover:text-white rounded-xl bg-slate-800 border border-slate-700"
-          title="Buka menu navigasi"
-        >
-          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        <div className="flex items-center gap-2">
+          <PwaInstallPrompt variant="compact" />
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 text-amber-400 hover:text-white rounded-xl bg-slate-800 border border-slate-700 cursor-pointer"
+            title="Buka menu navigasi"
+          >
+            {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+        </div>
       </header>
 
       {/* Main Container */}
@@ -590,14 +594,36 @@ export default function App() {
         )}
 
         {/* VIEW AREA (Content) */}
-        <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full overflow-y-auto pb-24 md:pb-8">
+          <PwaInstallPrompt variant="banner" />
           {renderTabContent()}
           <footer className="mt-12 pt-6 border-t border-slate-900 text-center text-[11px] text-slate-500">
-            ©2026 by CMS04 Digital Team
+            ©2026 by CMS04 Digital Team • PWA Mobile & Desktop App
           </footer>
         </main>
 
       </div>
+
+      {/* MOBILE BOTTOM NAVIGATION BAR (App Like Experience on Mobile) */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 border-t border-slate-800/90 backdrop-blur-xl flex justify-around items-center py-2 px-1 shadow-2xl pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+        {visibleNavItems.slice(0, 5).map((item) => {
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as any)}
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
+                isActive ? 'text-amber-400 font-bold scale-105' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <div className={isActive ? 'p-1 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400' : ''}>
+                {item.icon}
+              </div>
+              <span className="text-[10px] tracking-tight">{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
     </div>
   );
