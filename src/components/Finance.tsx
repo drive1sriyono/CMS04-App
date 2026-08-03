@@ -22,7 +22,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { User, Warga, FinancialTransaction, PaymentSubmission } from '../types';
-import { formatCurrency, formatDate } from '../data/initialData';
+import { formatCurrency, formatDate, getStoredUsers } from '../data/initialData';
 import { compressImageFile } from '../utils/imageCompressor';
 
 interface FinanceProps {
@@ -1469,7 +1469,7 @@ export default function Finance({
                   </div>
                   <div>
                     <p className="font-bold border-b border-amber-500/40 pb-0.5 mx-4 text-white">
-                      Sarah Amelia
+                      {getStoredUsers().find(u => u.role === 'bendahara')?.fullName || 'Sarah Amelia'}
                     </p>
                     <p className="text-[10px] text-slate-400">Bendahara RT</p>
                   </div>

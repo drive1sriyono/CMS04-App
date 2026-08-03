@@ -61,6 +61,7 @@ export default function WargaData({
   onDeleteWarga 
 }: WargaDataProps) {
   const canManageWarga = ['admin', 'RT', 'bendahara'].includes(currentUser.role);
+  const canDeleteWarga = ['admin', 'RT'].includes(currentUser.role);
   const isWargaRole = currentUser.role === 'warga';
   const [isKartuIuranOpen, setIsKartuIuranOpen] = useState(false);
 
@@ -294,8 +295,8 @@ export default function WargaData({
 
   // Handle Delete Citizen
   const handleDeleteClick = (id: string, name: string) => {
-    if (!canManageWarga) {
-      alert('Anda tidak memiliki akses untuk menghapus data warga.');
+    if (!canDeleteWarga) {
+      alert('Hanya Ketua RT dan Admin Sistem yang diperbolehkan menghapus data warga.');
       return;
     }
 
@@ -363,7 +364,7 @@ export default function WargaData({
         <div>
           <h2 className="text-xl md:text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
             <Users className="text-amber-400" size={26} />
-            Pengelolaan Sensus & Data Warga
+            Pengelolaan Data Warga
           </h2>
           <p className="text-xs text-slate-400 mt-1">
             Lihat, kelola, dan unduh data sensus iuran kas bulanan warga RT secara digital dan sistematis.
@@ -382,84 +383,6 @@ export default function WargaData({
           </div>
         )}
       </div>
-
-      {/* Logged in User Dues Summary Banner (Minimizable Kartu Iuran) */}
-      {activeWargaRecord && (
-        <div className="bg-gradient-to-r from-slate-900 via-amber-950/30 to-slate-900 border border-amber-500/30 rounded-3xl p-5 shadow-xl">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-4 mb-4">
-            <div className="flex items-start sm:items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5 sm:mt-0">
-                <ShieldCheck size={22} />
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-bold text-amber-400 tracking-widest block">Kartu Iuran Warga Terdaftar</span>
-                <div className="flex flex-wrap items-center gap-2 text-sm font-black text-white leading-tight">
-                  <span>Pencatatan Pembayaran: <strong className="text-white">{activeWargaRecord.fullName}</strong></span>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono font-bold whitespace-nowrap">
-                    Blok Rumah: {activeWargaRecord.blok}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30 font-mono whitespace-nowrap">
-                {activePaidSummary.count > 0 ? `Terbayar s.d. ${activePaidSummary.lastPaidMonth?.replace(' 2026', '')} 2026 (${activePaidSummary.count}/12 Bulan)` : 'Belum Ada Pembayaran'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsKartuIuranOpen(!isKartuIuranOpen)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-900 text-amber-300 hover:text-amber-400 border-2 border-amber-500/80 text-[11px] font-bold shadow-md shadow-amber-500/10 transition-all cursor-pointer shrink-0"
-              >
-                {isKartuIuranOpen ? (
-                  <>
-                    <ChevronUp size={14} className="text-amber-400" />
-                    <span>Minimize</span>
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown size={14} className="text-amber-400" />
-                    <span>Buka Kartu</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {isKartuIuranOpen && (
-            <div className="space-y-2">
-              <p className="text-[11px] text-slate-400 font-medium">
-                Progres Pencatatan Iuran Bulanan 2026:
-              </p>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                {ALL_MONTHS_2026.map(m => {
-                  const isPaid = activePaidMonths.includes(m);
-                  const shortMonth = m.replace(' 2026', '');
-                  return (
-                    <div
-                      key={m}
-                      className={`p-2 rounded-xl text-center border transition-all ${
-                        isPaid
-                          ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-300 shadow-md shadow-emerald-500/5'
-                          : 'bg-slate-950/60 border-slate-800/80 text-slate-500'
-                      }`}
-                    >
-                      <div className="flex items-center justify-center gap-1 mb-0.5">
-                        {isPaid ? <CheckCircle2 size={12} className="text-emerald-400" /> : <XCircle size={12} className="text-slate-600" />}
-                        <span className="text-[11px] font-bold">{shortMonth}</span>
-                      </div>
-                      <span className={`text-[9px] font-mono block ${isPaid ? 'text-emerald-400 font-bold' : 'text-slate-600'}`}>
-                        {isPaid ? 'LUNAS' : 'BELUM'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Main Table card */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl">
         
@@ -467,7 +390,7 @@ export default function WargaData({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-800">
           <div className="flex items-center gap-2">
             <Users size={18} className="text-amber-400" />
-            <h3 className="text-sm font-bold uppercase tracking-wider text-white">Sensus Penduduk RT</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-white">Data Warga RT04</h3>
             <span className="ml-2 text-xs bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2.5 py-0.5 rounded-full font-mono font-bold">
               {filteredWarga.length} Terdaftar
             </span>
@@ -577,7 +500,7 @@ export default function WargaData({
 
                         {/* Editor Controls (Admin, RT & Bendahara) */}
                         {canManageWarga && (
-                          <>
+                          <div className="flex items-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => startEditWarga(w)}
@@ -586,15 +509,17 @@ export default function WargaData({
                             >
                               <Edit2 size={14} />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteClick(w.id, w.fullName)}
-                              className="p-1.5 text-slate-400 hover:text-red-400 bg-slate-800 hover:bg-red-950/60 rounded-lg border border-slate-700 transition-colors cursor-pointer"
-                              title="Hapus Warga"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </>
+                            {canDeleteWarga && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteClick(w.id, w.fullName)}
+                                className="p-1.5 text-slate-400 hover:text-red-400 bg-slate-800 hover:bg-red-950/60 rounded-lg border border-slate-700 transition-colors cursor-pointer"
+                                title="Hapus Warga"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </td>
@@ -776,28 +701,28 @@ export default function WargaData({
 
               <div className="flex flex-col sm:flex-row gap-2">
                 {canManageWarga && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const target = selectedWargaForDetail;
-                        setSelectedWargaForDetail(null);
-                        startEditWarga(target);
-                      }}
-                      className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer border border-slate-700 flex items-center justify-center gap-1.5"
-                    >
-                      <Edit2 size={14} />
-                      Edit Data
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteClick(selectedWargaForDetail.id, selectedWargaForDetail.fullName)}
-                      className="py-2.5 px-4 bg-slate-800 hover:bg-red-950/80 text-slate-300 hover:text-red-400 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer border border-slate-700 flex items-center justify-center gap-1.5"
-                    >
-                      <Trash2 size={14} />
-                      Hapus
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = selectedWargaForDetail;
+                      setSelectedWargaForDetail(null);
+                      startEditWarga(target);
+                    }}
+                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer border border-slate-700 flex items-center justify-center gap-1.5"
+                  >
+                    <Edit2 size={14} />
+                    Edit Data
+                  </button>
+                )}
+                {canDeleteWarga && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteClick(selectedWargaForDetail.id, selectedWargaForDetail.fullName)}
+                    className="py-2.5 px-4 bg-slate-800 hover:bg-red-950/80 text-slate-300 hover:text-red-400 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer border border-slate-700 flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 size={14} />
+                    Hapus
+                  </button>
                 )}
                 <button
                   onClick={() => setSelectedWargaForDetail(null)}

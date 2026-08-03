@@ -10,7 +10,9 @@ import {
   Clock, 
   Eye, 
   CreditCard, 
-  CheckCircle 
+  CheckCircle,
+  ShieldCheck,
+  XCircle
 } from 'lucide-react';
 import { User, Warga, FinancialTransaction, PaymentSubmission } from '../types';
 import { formatCurrency, formatDate } from '../data/initialData';
@@ -101,6 +103,25 @@ export default function IuranSaya({
   const [isWargaFormOpen, setIsWargaFormOpen] = useState(false);
   const [isMySubmissionsOpen, setIsMySubmissionsOpen] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [isKartuIuranOpen, setIsKartuIuranOpen] = useState(true);
+
+  const getPaidRangeSummary = (paidMonths: string[]) => {
+    if (paidMonths.length === 0) {
+      return { text: 'Belum Ada Pembayaran', count: 0, lastPaidMonth: null };
+    }
+    const count = paidMonths.length;
+    const first = paidMonths[0].replace(' 2026', '');
+    const last = paidMonths[count - 1].replace(' 2026', '');
+    
+    let rangeText = '';
+    if (count === 1) {
+      rangeText = `Bulan ${first}`;
+    } else {
+      rangeText = `${first} - ${last} 2026`;
+    }
+
+    return { text: rangeText, count, lastPaidMonth: paidMonths[count - 1] };
+  };
 
   const hasPendingMySubmissions = mySubmissions.some(s => s.status === 'Pending');
 
@@ -255,6 +276,9 @@ export default function IuranSaya({
     badgeStyle = 'bg-rose-950/80 text-rose-300 border-rose-500/40';
   }
 
+  const activePaidMonths = MONTH_LIST.filter(m => paidSet.has(m));
+  const activePaidSummary = getPaidRangeSummary(activePaidMonths);
+
   return (
     <div className="space-y-8 animate-fadeIn text-slate-100">
       {/* Header */}
@@ -268,57 +292,91 @@ export default function IuranSaya({
         </p>
       </div>
 
-      {/* SECTION c: Kartu Iuran Warga Terdaftar (Matrix 2026) */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
-              <CheckCircle size={18} className="text-amber-400" />
-              <span>Kartu & Status Pembayaran Iuran Akun Saya</span>
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Status iuran terkoneksi otomatis dengan akun @{currentUser.username} (Blok {currentUser.blok})
-            </p>
+      {/* SECTION c: Kartu Iuran Warga Terdaftar (Minimizable Banner) */}
+      <div className="bg-gradient-to-r from-slate-900 via-amber-950/30 to-slate-900 border border-amber-500/30 rounded-3xl p-5 shadow-xl">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-4 mb-4">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5 sm:mt-0">
+              <ShieldCheck size={22} />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] uppercase font-bold text-amber-400 tracking-widest block">Kartu Iuran Saya</span>
+              <div className="flex flex-wrap items-center gap-2 text-sm font-black text-white leading-tight">
+                <span>Pencatatan Pembayaran: <strong className="text-white">{currentUser.fullName}</strong></span>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono font-bold whitespace-nowrap">
+                  Blok Rumah: {currentUser.blok}
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex flex-wrap items-center gap-3">
             <span className={`px-3 py-1 rounded-full text-xs font-bold border ${badgeStyle}`}>
               {statusText}
             </span>
-            <span className="text-xs font-mono font-bold text-amber-400 bg-slate-950 px-3 py-1 rounded-full border border-slate-800">
-              {paidSet.size}/12 Bulan
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30 font-mono whitespace-nowrap">
+              {activePaidSummary.count > 0 ? `Terbayar s.d. ${activePaidSummary.lastPaidMonth?.replace(' 2026', '')} 2026 (${activePaidSummary.count}/12 Bulan)` : 'Belum Ada Pembayaran'}
             </span>
+            <button
+              type="button"
+              onClick={() => setIsKartuIuranOpen(!isKartuIuranOpen)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-900 text-amber-300 hover:text-amber-400 border-2 border-amber-500/80 text-[11px] font-bold shadow-md shadow-amber-500/10 transition-all cursor-pointer shrink-0"
+            >
+              {isKartuIuranOpen ? (
+                <>
+                  <ChevronUp size={14} className="text-amber-400" />
+                  <span>Minimize</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown size={14} className="text-amber-400" />
+                  <span>Buka Kartu</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
-        {/* Matrix 2026 */}
-        <div>
-          <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Matriks Setoran 2026</h4>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-            {MONTH_LIST.map(m => {
-              const isPaid = paidSet.has(m);
-              const isPending = pendingSet.has(m);
-              const shortM = m.replace(' 2026', '');
-
-              let cardClass = 'bg-slate-950/80 border-slate-800 text-slate-500';
-              let status = 'Belum Lunas';
-
-              if (isPaid) {
-                cardClass = 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 font-bold';
-                status = 'Lunas';
-              } else if (isPending) {
-                cardClass = 'bg-amber-950/60 border-amber-500/40 text-amber-300 font-bold';
-                status = 'Verifikasi';
-              }
-
-              return (
-                <div key={m} className={`p-2.5 rounded-xl border text-center transition-all ${cardClass}`}>
-                  <p className="text-[11px] font-bold">{shortM}</p>
-                  <p className="text-[9px] uppercase tracking-wider opacity-80 mt-0.5">{status}</p>
-                </div>
-              );
-            })}
+        {isKartuIuranOpen && (
+          <div className="space-y-2">
+            <p className="text-[11px] text-slate-400 font-medium">
+              Progres Pencatatan Iuran Bulanan 2026:
+            </p>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+              {MONTH_LIST.map(m => {
+                const isPaid = paidSet.has(m);
+                const isPending = pendingSet.has(m);
+                const shortMonth = m.replace(' 2026', '');
+                return (
+                  <div
+                    key={m}
+                    className={`p-2 rounded-xl text-center border transition-all ${
+                      isPaid
+                        ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-300 shadow-md shadow-emerald-500/5 font-bold'
+                        : isPending
+                        ? 'bg-amber-950/70 border-amber-500/50 text-amber-300 shadow-md shadow-amber-500/5 font-bold'
+                        : 'bg-slate-950/60 border-slate-800/80 text-slate-500'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-1 mb-0.5">
+                      {isPaid ? (
+                        <CheckCircle2 size={12} className="text-emerald-400" />
+                      ) : isPending ? (
+                        <CheckCircle2 size={12} className="text-amber-400" />
+                      ) : (
+                        <XCircle size={12} className="text-slate-600" />
+                      )}
+                      <span className="text-[11px] font-bold">{shortMonth}</span>
+                    </div>
+                    <span className={`text-[9px] font-mono block ${isPaid ? 'text-emerald-400 font-bold' : isPending ? 'text-amber-400 font-bold' : 'text-slate-600'}`}>
+                      {isPaid ? 'LUNAS' : isPending ? 'PENDING' : 'BELUM'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* SECTION a & b: Form Pengajuan & Riwayat Pengajuan Saya */}
@@ -617,10 +675,10 @@ export default function IuranSaya({
         </div>
       </div>
 
-      {/* SECTION d: Histori Transaksi Account Saya */}
+      {/* SECTION d: Riwayat Transaksi saya */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
         <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">
-          Histori Transaksi Account Saya ({myTxs.length + mySubmissions.length})
+          Riwayat Transaksi saya ({myTxs.length + mySubmissions.length})
         </h4>
         {myTxs.length === 0 && mySubmissions.length === 0 ? (
           <p className="text-xs text-slate-500 italic p-4 bg-slate-950 rounded-xl text-center border border-slate-800/60">

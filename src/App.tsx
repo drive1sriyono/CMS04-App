@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, 
   User as UserIcon, 
-  DollarSign, 
+  Coins, 
   Users, 
   Lock, 
   Database, 
@@ -67,6 +67,7 @@ export default function App() {
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [submissions, setSubmissions] = useState<PaymentSubmission[]>([]);
   const [dbStatus, setDbStatus] = useState<DatabaseStatus>({ connected: false, mode: 'offline' });
+  const [activeToasts, setActiveToasts] = useState<Array<{ id: string; title: string; message: string; type: 'info' | 'success' }>>([]);
   
   // Navigation States
   const [activeTab, setActiveTab] = useState<'dashboard' | 'profile' | 'finance' | 'warga' | 'users' | 'backup' | 'iuran-saya'>('dashboard');
@@ -133,14 +134,14 @@ export default function App() {
     setSubmissions(initialLocalSub);
     setDbStatus(getStoredDbStatus());
 
-    // Auto-login session recovery from sessionStorage if available
-    const cachedUser = sessionStorage.getItem('rt_digital_active_user');
+    // Auto-login session recovery from localStorage if available
+    const cachedUser = localStorage.getItem('rt_digital_active_user');
     if (cachedUser) {
       try {
         const parsed = JSON.parse(cachedUser);
         setCurrentUser(parsed);
       } catch (e) {
-        sessionStorage.removeItem('rt_digital_active_user');
+        localStorage.removeItem('rt_digital_active_user');
       }
     }
 
@@ -199,6 +200,145 @@ export default function App() {
     };
   }, []);
 
+  // Setup audio notification tone generator using Web Audio API
+  const playNotificationSound = () => {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      
+      const playTone = (freq: number, startTime: number, duration: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, startTime);
+        
+        gain.gain.setValueAtTime(0.15, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      };
+      
+      const now = ctx.currentTime;
+      playTone(523.25, now, 0.4); // C5
+      playTone(659.25, now + 0.1, 0.5); // E5
+    } catch (e) {
+      console.error('Audio notification failed:', e);
+    }
+  };
+
+  // Request browser notification permission for bendahara
+  useEffect(() => {
+    if (currentUser?.role === 'bendahara' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+  }, [currentUser]);
+
+  // Keep track of notified records
+  const isNotificationInitializedRef = useRef(false);
+  const notifiedIdsRef = useRef<Set<string>>(new Set());
+
+  // Listen to submissions & transactions for bendahara notifications
+  useEffect(() => {
+    if (currentUser?.role === 'bendahara') {
+      // 1. Load historical notified IDs from localStorage
+      const saved = localStorage.getItem('rt_notified_payment_ids');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(id => notifiedIdsRef.current.add(id));
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      // 2. Baseline initialization on first load of submissions/transactions to avoid old alerts
+      if (!isNotificationInitializedRef.current && (submissions.length > 0 || transactions.length > 0)) {
+        submissions.forEach(s => notifiedIdsRef.current.add(s.id));
+        transactions.forEach(t => notifiedIdsRef.current.add(t.id));
+        isNotificationInitializedRef.current = true;
+        localStorage.setItem('rt_notified_payment_ids', JSON.stringify(Array.from(notifiedIdsRef.current)));
+        return;
+      }
+
+      // 3. Detect new pending submissions or income transactions
+      let triggered = false;
+
+      const newPendingSubmissions = submissions.filter(s => s.status === 'Pending' && !notifiedIdsRef.current.has(s.id));
+      const newIncomeTransactions = transactions.filter(t => t.type === 'Pemasukan' && !notifiedIdsRef.current.has(t.id));
+
+      newPendingSubmissions.forEach(s => {
+        notifiedIdsRef.current.add(s.id);
+        triggered = true;
+
+        // Native Push Notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification('Pengajuan Iuran Baru', {
+              body: `Warga ${s.wargaName} mengajukan iuran Rp ${s.amount.toLocaleString('id-ID')} (${s.paidMonths.join(', ')}).`,
+            });
+          } catch (e) {
+            console.error('Native notification error:', e);
+          }
+        }
+
+        // In-app Toast Alert
+        const newToast = {
+          id: `toast-sub-${s.id}-${Date.now()}`,
+          title: 'Pengajuan Iuran Online Baru',
+          message: `Warga ${s.wargaName} mengirimkan pengajuan iuran Rp ${s.amount.toLocaleString('id-ID')} untuk ${s.paidMonths.join(', ')}.`,
+          type: 'success' as const
+        };
+        setActiveToasts(prev => [...prev, newToast]);
+        setTimeout(() => {
+          setActiveToasts(prev => prev.filter(t => t.id !== newToast.id));
+        }, 10000);
+      });
+
+      newIncomeTransactions.forEach(t => {
+        notifiedIdsRef.current.add(t.id);
+        triggered = true;
+
+        // Native Push Notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification('Pembayaran Kas Masuk', {
+              body: `Iuran senilai Rp ${t.amount.toLocaleString('id-ID')} dari ${t.wargaName || 'Warga'} berhasil dicatat.`,
+            });
+          } catch (e) {
+            console.error('Native notification error:', e);
+          }
+        }
+
+        // In-app Toast Alert
+        const newToast = {
+          id: `toast-tx-${t.id}-${Date.now()}`,
+          title: 'Dana Kas Masuk Baru',
+          message: `Pembayaran iuran Rp ${t.amount.toLocaleString('id-ID')} dari ${t.wargaName || 'Warga'} berhasil diverifikasi dan masuk kas.`,
+          type: 'info' as const
+        };
+        setActiveToasts(prev => [...prev, newToast]);
+        setTimeout(() => {
+          setActiveToasts(prev => prev.filter(t => t.id !== newToast.id));
+        }, 10000);
+      });
+
+      if (triggered) {
+        playNotificationSound();
+        localStorage.setItem('rt_notified_payment_ids', JSON.stringify(Array.from(notifiedIdsRef.current)));
+      }
+    }
+  }, [submissions, transactions, currentUser]);
+
   // Sync personal profile modifications instantly to currentUser session state & Supabase
   const handleUpdateUser = (updatedUser: User) => {
     const updatedUsers = users.map(u => u.id === updatedUser.id ? updatedUser : u);
@@ -208,7 +348,7 @@ export default function App() {
 
     if (currentUser && currentUser.id === updatedUser.id) {
       setCurrentUser(updatedUser);
-      sessionStorage.setItem('rt_digital_active_user', JSON.stringify(updatedUser));
+      localStorage.setItem('rt_digital_active_user', JSON.stringify(updatedUser));
     }
 
     if (updatedUser.role !== 'admin') {
@@ -320,7 +460,7 @@ export default function App() {
 
       if (currentUser && currentUser.id === updatedW.id) {
         setCurrentUser(updatedAcc);
-        sessionStorage.setItem('rt_digital_active_user', JSON.stringify(updatedAcc));
+        localStorage.setItem('rt_digital_active_user', JSON.stringify(updatedAcc));
       }
     }
   };
@@ -509,7 +649,7 @@ export default function App() {
       const exists = state.users.find(u => u.id === currentUser.id);
       if (exists) {
         setCurrentUser(exists);
-        sessionStorage.setItem('rt_digital_active_user', JSON.stringify(exists));
+        localStorage.setItem('rt_digital_active_user', JSON.stringify(exists));
       } else {
         handleLogout();
       }
@@ -524,14 +664,14 @@ export default function App() {
   // Login handler
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
-    sessionStorage.setItem('rt_digital_active_user', JSON.stringify(user));
+    localStorage.setItem('rt_digital_active_user', JSON.stringify(user));
     setActiveTab('dashboard');
   };
 
   // Logout handler
   const handleLogout = () => {
     setCurrentUser(null);
-    sessionStorage.removeItem('rt_digital_active_user');
+    localStorage.removeItem('rt_digital_active_user');
   };
 
   // If user is not logged in, render Login Page
@@ -544,7 +684,7 @@ export default function App() {
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
     { id: 'iuran-saya', label: 'Iuran Saya', icon: <CreditCard size={18} /> },
     { id: 'profile', label: 'Profil Saya', icon: <UserIcon size={18} /> },
-    { id: 'finance', label: 'Keuangan Kas', icon: <DollarSign size={18} /> },
+    { id: 'finance', label: 'Keuangan Kas RT', icon: <Coins size={18} /> },
     { id: 'warga', label: 'Data Warga', icon: <Users size={18} /> },
     { id: 'users', label: 'Manajemen User', icon: <Lock size={18} />, allowedRoles: ['admin', 'RT'] },
     { id: 'backup', label: 'Backup & Database', icon: <Database size={18} />, allowedRoles: ['admin'] }
@@ -826,6 +966,38 @@ export default function App() {
           );
         })}
       </nav>
+
+      {/* Floating Toast Notification Area */}
+      <div id="toast-container" className="fixed top-20 right-4 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+        {activeToasts.map(toast => (
+          <div
+            key={toast.id}
+            className={`p-4 rounded-2xl border shadow-2xl flex flex-col gap-1 text-slate-100 pointer-events-auto transition-all duration-300 animate-slideIn ${
+              toast.type === 'success' 
+                ? 'bg-emerald-950/95 border-emerald-500/40 shadow-emerald-500/10' 
+                : 'bg-slate-900/95 border-amber-500/30 shadow-amber-500/5'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                {toast.type === 'success' ? (
+                  <Sparkles className="text-emerald-400 shrink-0" size={16} />
+                ) : (
+                  <Coins className="text-amber-400 shrink-0" size={16} />
+                )}
+                <span className="font-extrabold text-[10px] text-white leading-tight uppercase tracking-wider">{toast.title}</span>
+              </div>
+              <button
+                onClick={() => setActiveToasts(prev => prev.filter(t => t.id !== toast.id))}
+                className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed font-medium mt-1">{toast.message}</p>
+          </div>
+        ))}
+      </div>
 
     </div>
   );

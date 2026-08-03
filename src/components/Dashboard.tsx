@@ -190,7 +190,7 @@ export default function Dashboard({ currentUser, warga, transactions, submission
           </div>
 
           <div className="text-right shrink-0">
-            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest block">Sinkronisasi Terakhir</span>
+            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest block">Sinkronisasi Database</span>
             <span className="inline-flex items-center gap-2 text-xs text-amber-300 bg-slate-950/90 px-4 py-1.5 rounded-full border border-amber-500/40 font-bold mt-1 shadow-md">
               <ShieldCheck size={14} className="text-amber-400" />
               {dbStatus?.lastTested ? dbStatus.lastTested : 'Terhubung'}
