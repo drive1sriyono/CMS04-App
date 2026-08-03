@@ -264,6 +264,8 @@ export default function App() {
           if (Array.isArray(parsed)) {
             parsed.forEach(id => notifiedIdsRef.current.add(id));
           }
+          // Mark as initialized so we immediately process newer offline items
+          isNotificationInitializedRef.current = true;
         } catch (e) {
           console.error(e);
         }
@@ -271,11 +273,22 @@ export default function App() {
 
       // 2. Baseline initialization on first load of submissions/transactions to avoid old alerts
       if (!isNotificationInitializedRef.current && (submissions.length > 0 || transactions.length > 0)) {
-        submissions.forEach(s => notifiedIdsRef.current.add(s.id));
+        // Only mark non-Pending submissions as already notified initially
+        submissions.forEach(s => {
+          if (s.status !== 'Pending') {
+            notifiedIdsRef.current.add(s.id);
+          }
+        });
         transactions.forEach(t => notifiedIdsRef.current.add(t.id));
         isNotificationInitializedRef.current = true;
         localStorage.setItem('rt_notified_payment_ids', JSON.stringify(Array.from(notifiedIdsRef.current)));
-        return;
+        
+        // If there are no pending submissions to alert, we can safely return.
+        // Otherwise, proceed to trigger notifications for the pending ones.
+        const hasPending = submissions.some(s => s.status === 'Pending' && !notifiedIdsRef.current.has(s.id));
+        if (!hasPending) {
+          return;
+        }
       }
 
       // 3. Detect new pending submissions or income transactions
