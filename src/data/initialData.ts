@@ -72,7 +72,22 @@ export const getStoredTransactions = (): FinancialTransaction[] => {
 };
 
 export const saveStoredTransactions = (transactions: FinancialTransaction[]) => {
-  localStorage.setItem('rt_digital_transactions', JSON.stringify(transactions));
+  // Sort descending by date so most recent are first
+  const sorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  
+  // Keep only the most recent 50 transactions to prevent infinite storage growth on device
+  const trimmed = sorted.slice(0, 50);
+
+  // Strip out heavy base64 proof images for stored transactions,
+  // keeping it only for the 3 most recent transactions for brief offline/recent check
+  const optimized = trimmed.map((tx, idx) => {
+    if (idx >= 3) {
+      return { ...tx, proofImage: undefined };
+    }
+    return tx;
+  });
+
+  localStorage.setItem('rt_digital_transactions', JSON.stringify(optimized));
 };
 
 export const getStoredSubmissions = (): PaymentSubmission[] => {
@@ -85,7 +100,30 @@ export const getStoredSubmissions = (): PaymentSubmission[] => {
 };
 
 export const saveStoredSubmissions = (submissions: PaymentSubmission[]) => {
-  localStorage.setItem('rt_digital_submissions', JSON.stringify(submissions));
+  // Always preserve ALL "Pending" submissions (extremely crucial so local/unsynced submissions are safe)
+  const pendingSubmissions = submissions.filter(s => s.status === 'Pending');
+  
+  // Sort completed submissions (Approved/Rejected) by submission date descending
+  const completedSubmissions = submissions
+    .filter(s => s.status !== 'Pending')
+    .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+
+  // Only keep the most recent 20 completed submissions in the local cache
+  const trimmedCompleted = completedSubmissions.slice(0, 20);
+
+  // Combine both arrays
+  const combined = [...pendingSubmissions, ...trimmedCompleted];
+
+  // Strip out heavy base64 proof images for ALL completed submissions.
+  // Since they are already processed and synced in Supabase, we can retrieve them on-demand online.
+  const optimized = combined.map(sub => {
+    if (sub.status !== 'Pending') {
+      return { ...sub, proofImage: '' };
+    }
+    return sub;
+  });
+
+  localStorage.setItem('rt_digital_submissions', JSON.stringify(optimized));
 };
 
 export const getStoredDbStatus = (): DatabaseStatus => {
