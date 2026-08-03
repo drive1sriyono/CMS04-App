@@ -113,6 +113,19 @@ export const mapTransactionToSupabase = (tx: FinancialTransaction) => {
   const isPemasukan = tx.type === 'Pemasukan';
   const category = isPemasukan ? 'iuran' : 'lainnya';
 
+  const monthStr = (tx.paidMonths && tx.paidMonths.length > 0)
+    ? tx.paidMonths.join(', ')
+    : (tx.date || 'Januari');
+
+  const currentYear = new Date().getFullYear();
+  let parsedYear = currentYear;
+  if (tx.date) {
+    const match = tx.date.match(/\d{4}/);
+    if (match) {
+      parsedYear = parseInt(match[0], 10);
+    }
+  }
+
   return {
     id: tx.id,
     type: tx.type,
@@ -123,7 +136,9 @@ export const mapTransactionToSupabase = (tx: FinancialTransaction) => {
     description: tx.description || '',
     proof_image: tx.proofImage || null,
     paid_months: tx.paidMonths ? JSON.stringify(tx.paidMonths) : '[]',
-    category: category
+    category: category,
+    month: monthStr,
+    year: parsedYear
   };
 };
 
@@ -160,6 +175,15 @@ export const mapSubmissionToSupabase = (sub: PaymentSubmission) => {
     ? sub.paidMonths.join(', ')
     : (sub.date || 'Januari');
 
+  const currentYear = new Date().getFullYear();
+  let parsedYear = currentYear;
+  if (sub.date) {
+    const match = sub.date.match(/\d{4}/);
+    if (match) {
+      parsedYear = parseInt(match[0], 10);
+    }
+  }
+
   return {
     id: sub.id,
     warga_id: sub.wargaId || null,
@@ -167,8 +191,9 @@ export const mapSubmissionToSupabase = (sub: PaymentSubmission) => {
     blok: sub.blok || null,
     amount: sub.amount,
     date: sub.date,
-    month: monthStr, // Fixes: null value in column "month" violates not-null constraint
+    month: monthStr, // Fixes: null value in column "month"
     months: monthStr,
+    year: parsedYear, // Fixes: null value in column "year" violates not-null constraint
     paid_months: sub.paidMonths ? JSON.stringify(sub.paidMonths) : '[]',
     proof_image: sub.proofImage || null,
     status: sub.status,
