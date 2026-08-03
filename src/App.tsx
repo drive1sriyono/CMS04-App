@@ -214,8 +214,9 @@ export default function App() {
             const approvedSubs = merged.filter(s => s.status === 'Approved');
             if (approvedSubs.length > 0) {
               setWarga(prevWarga => {
-                let changed = false;
+                let anyChanged = false;
                 const updatedWargaList = prevWarga.map(w => {
+                  let itemChanged = false;
                   let monthsSet = new Set(w.paidMonths || []);
                   approvedSubs.forEach(sub => {
                     const isMatch = (
@@ -228,17 +229,18 @@ export default function App() {
                       sub.paidMonths.forEach(m => {
                         if (!monthsSet.has(m)) {
                           monthsSet.add(m);
-                          changed = true;
+                          itemChanged = true;
+                          anyChanged = true;
                         }
                       });
                     }
                   });
-                  if (changed) {
+                  if (itemChanged) {
                     return { ...w, paidMonths: Array.from(monthsSet), statusIuran: 'Lunas' as const };
                   }
                   return w;
                 });
-                if (changed) {
+                if (anyChanged) {
                   saveStoredWarga(updatedWargaList);
                 }
                 return updatedWargaList;

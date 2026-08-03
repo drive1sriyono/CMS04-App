@@ -219,6 +219,14 @@ export const mapSupabaseToSubmission = (row: any): PaymentSubmission => {
     paidMonths = typeof row.month === 'string' ? row.month.split(',').map((s: string) => s.trim()) : [row.month];
   }
 
+  const rawStatus = String(row.status || 'Pending').toLowerCase().trim();
+  let mappedStatus: 'Pending' | 'Approved' | 'Rejected' = 'Pending';
+  if (rawStatus.includes('appr') || rawStatus.includes('setuju') || rawStatus.includes('terima') || rawStatus === 'lunas' || rawStatus === 'success') {
+    mappedStatus = 'Approved';
+  } else if (rawStatus.includes('rej') || rawStatus.includes('tolak') || rawStatus.includes('gagal') || rawStatus === 'failed') {
+    mappedStatus = 'Rejected';
+  }
+
   return {
     id: row.id,
     wargaId: row.warga_id || row.wargaId,
@@ -228,7 +236,7 @@ export const mapSupabaseToSubmission = (row: any): PaymentSubmission => {
     date: row.date,
     paidMonths: paidMonths || [],
     proofImage: row.proof_image || row.proofImage || '',
-    status: row.status,
+    status: mappedStatus,
     submittedBy: row.submitted_by || row.submittedBy,
     submittedAt: row.submitted_at || row.submittedAt,
     rejectionReason: row.rejection_reason || row.rejectionReason,
@@ -310,43 +318,66 @@ export const safeUpsert = async (
     return err.code === '23514' || errMsg.includes('violates check constraint') || errMsg.includes('check constraint');
   };
 
-  // If we hit a check constraint error initially on financial_transactions (like financial_transactions_type_check)
-  if (tableName === 'financial_transactions' && isCheckConstraintError(error)) {
-    const alternatives = [
-      { type: { 'Pemasukan': 'income', 'Pengeluaran': 'expense' }, category: { 'iuran': 'income', 'lainnya': 'expense' } },
-      { type: { 'Pemasukan': 'pemasukan', 'Pengeluaran': 'pengeluaran' }, category: { 'iuran': 'pemasukan', 'lainnya': 'pengeluaran' } },
-      { type: { 'Pemasukan': 'INCOME', 'Pengeluaran': 'EXPENSE' }, category: { 'iuran': 'INCOME', 'lainnya': 'EXPENSE' } },
-      { type: { 'Pemasukan': 'income', 'Pengeluaran': 'outcome' }, category: { 'iuran': 'income', 'lainnya': 'outcome' } },
-      { type: { 'Pemasukan': 'deposit', 'Pengeluaran': 'withdrawal' }, category: { 'iuran': 'deposit', 'lainnya': 'withdrawal' } },
-    ];
+  // Check constraint mapping retry helper
+  const tryCheckConstraintFix = async (tableName: string, rows: any[]) => {
+    let checkAlts: any[] = [];
+    if (tableName === 'financial_transactions') {
+      checkAlts = [
+        { type: { 'Pemasukan': 'income', 'Pengeluaran': 'expense' }, category: { 'iuran': 'income', 'lainnya': 'expense' } },
+        { type: { 'Pemasukan': 'pemasukan', 'Pengeluaran': 'pengeluaran' }, category: { 'iuran': 'pemasukan', 'lainnya': 'pengeluaran' } },
+        { type: { 'Pemasukan': 'INCOME', 'Pengeluaran': 'EXPENSE' }, category: { 'iuran': 'INCOME', 'lainnya': 'EXPENSE' } },
+        { type: { 'Pemasukan': 'income', 'Pengeluaran': 'outcome' }, category: { 'iuran': 'income', 'lainnya': 'outcome' } },
+        { type: { 'Pemasukan': 'deposit', 'Pengeluaran': 'withdrawal' }, category: { 'iuran': 'deposit', 'lainnya': 'withdrawal' } },
+      ];
+    } else if (tableName === 'payment_submissions') {
+      checkAlts = [
+        { status: { 'Approved': 'approved', 'Rejected': 'rejected', 'Pending': 'pending' } },
+        { status: { 'Approved': 'APPROVED', 'Rejected': 'REJECTED', 'Pending': 'PENDING' } },
+        { status: { 'Approved': 'disetujui', 'Rejected': 'ditolak', 'Pending': 'menunggu' } },
+        { status: { 'Approved': 'lunas', 'Rejected': 'ditolak', 'Pending': 'pending' } },
+      ];
+    }
 
-    for (const alt of alternatives) {
-      const mappedRows = currentRows.map(row => {
+    for (const alt of checkAlts) {
+      const mappedRows = rows.map(row => {
         const copy = { ...row };
-        if (copy.type) {
-          copy.type = (alt.type as any)[copy.type] || copy.type;
+        if (alt.type && copy.type) {
+          copy.type = alt.type[copy.type] || copy.type;
         }
-        if (copy.category) {
-          copy.category = (alt.category as any)[copy.category] || copy.category;
+        if (alt.category && copy.category) {
+          copy.category = alt.category[copy.category] || copy.category;
+        }
+        if (alt.status && copy.status) {
+          copy.status = alt.status[copy.status] || copy.status;
         }
         return copy;
       });
 
       const retryRes = await client.from(tableName).upsert(mappedRows, { onConflict: 'id' });
       if (!retryRes.error) {
-        return null; // success!
+        return { success: true, error: null };
       }
-      error = retryRes.error;
     }
+    return { success: false };
+  };
+
+  if (isCheckConstraintError(error)) {
+    const fixed = await tryCheckConstraintFix(tableName, currentRows);
+    if (fixed.success) return null;
   }
 
-  // Column pruning retry loop
+  // Column pruning and NOT NULL constraint retry loop
   while (error && attempts < 10) {
     attempts++;
     const errMsg = error.message || '';
-    const match = errMsg.match(/Could not find the '([^']+)' column/i);
-    if (match && match[1]) {
-      const missingCol = match[1];
+
+    // Case 1: Missing column error
+    const matchCol = errMsg.match(/Could not find the '([^']+)' column/i);
+    // Case 2: NOT NULL constraint error
+    const matchNotNull = errMsg.match(/null value in column "([^"]+)"/i) || errMsg.match(/column "([^"]+)" of relation "[^"]+" violates not-null constraint/i);
+
+    if (matchCol && matchCol[1]) {
+      const missingCol = matchCol[1];
       console.warn(`Column '${missingCol}' missing in Supabase table '${tableName}'. Stripping and retrying...`);
       currentRows = currentRows.map(r => {
         const copy = { ...r };
@@ -355,38 +386,32 @@ export const safeUpsert = async (
       });
       const retryRes = await client.from(tableName).upsert(currentRows, { onConflict: 'id' });
       error = retryRes.error;
-
-      // If we now get a check constraint error after pruning, try constraint mappings
-      if (tableName === 'financial_transactions' && isCheckConstraintError(error)) {
-        const alternatives = [
-          { type: { 'Pemasukan': 'income', 'Pengeluaran': 'expense' }, category: { 'iuran': 'income', 'lainnya': 'expense' } },
-          { type: { 'Pemasukan': 'pemasukan', 'Pengeluaran': 'pengeluaran' }, category: { 'iuran': 'pemasukan', 'lainnya': 'pengeluaran' } },
-          { type: { 'Pemasukan': 'INCOME', 'Pengeluaran': 'EXPENSE' }, category: { 'iuran': 'INCOME', 'lainnya': 'EXPENSE' } },
-          { type: { 'Pemasukan': 'income', 'Pengeluaran': 'outcome' }, category: { 'iuran': 'income', 'lainnya': 'outcome' } },
-          { type: { 'Pemasukan': 'deposit', 'Pengeluaran': 'withdrawal' }, category: { 'iuran': 'deposit', 'lainnya': 'withdrawal' } },
-        ];
-
-        for (const alt of alternatives) {
-          const mappedRows = currentRows.map(row => {
-            const copy = { ...row };
-            if (copy.type) {
-              copy.type = (alt.type as any)[copy.type] || copy.type;
-            }
-            if (copy.category) {
-              copy.category = (alt.category as any)[copy.category] || copy.category;
-            }
-            return copy;
-          });
-
-          const constraintRetryRes = await client.from(tableName).upsert(mappedRows, { onConflict: 'id' });
-          if (!constraintRetryRes.error) {
-            return null; // success!
-          }
-          error = constraintRetryRes.error;
+    } else if (matchNotNull && matchNotNull[1]) {
+      const notNullCol = matchNotNull[1];
+      console.warn(`Column '${notNullCol}' violates NOT NULL in Supabase table '${tableName}'. Filling default and retrying...`);
+      currentRows = currentRows.map(r => {
+        const copy = { ...r };
+        if (copy[notNullCol] === undefined || copy[notNullCol] === null) {
+          if (notNullCol === 'year') copy[notNullCol] = new Date().getFullYear();
+          else if (notNullCol === 'month' || notNullCol === 'months') copy[notNullCol] = 'Januari';
+          else if (notNullCol === 'amount') copy[notNullCol] = 0;
+          else if (notNullCol === 'paid_months') copy[notNullCol] = '[]';
+          else if (notNullCol === 'status') copy[notNullCol] = 'Pending';
+          else if (notNullCol.includes('date') || notNullCol.includes('at')) copy[notNullCol] = new Date().toISOString();
+          else copy[notNullCol] = 'N/A';
         }
-      }
+        return copy;
+      });
+      const retryRes = await client.from(tableName).upsert(currentRows, { onConflict: 'id' });
+      error = retryRes.error;
     } else {
       break;
+    }
+
+    // Check constraint retry if needed after column modification
+    if (error && isCheckConstraintError(error)) {
+      const fixed = await tryCheckConstraintFix(tableName, currentRows);
+      if (fixed.success) return null;
     }
   }
 
