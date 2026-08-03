@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   LayoutDashboard, 
   User as UserIcon, 
@@ -117,6 +117,108 @@ export default function App() {
     return updatedWarga;
   };
 
+  // Synchronize data with Supabase Cloud
+  const runSync = useCallback(async () => {
+    try {
+      const res = await fetchAllFromSupabase();
+      if (res.error) {
+        console.error("Sync error:", res.error);
+        setDbStatus(prev => {
+          const updated = {
+            ...prev,
+            connected: false,
+            lastTested: `Gagal Sinkronisasi: ${res.error} (${new Date().toLocaleTimeString('id-ID')})`
+          };
+          saveStoredDbStatus(updated);
+          return updated;
+        });
+        return;
+      }
+
+      if (res.users && res.users.length > 0) {
+        const fetchedUsers = res.users;
+        const fetchedWarga = res.warga || [];
+        const reconciledWarga = reconcileUsersAndWarga(fetchedUsers, fetchedWarga);
+
+        setUsers(fetchedUsers);
+        saveStoredUsers(fetchedUsers);
+        setWarga(reconciledWarga);
+        saveStoredWarga(reconciledWarga);
+
+        if (res.transactions) {
+          setTransactions(prevTransactions => {
+            const fetchedTxIds = new Set(res.transactions!.map(t => t.id));
+            const localOnlyTx = prevTransactions.filter(t => !fetchedTxIds.has(t.id));
+            
+            // Auto-sync local-only transactions to Supabase!
+            if (localOnlyTx.length > 0) {
+              console.log(`Auto-syncing ${localOnlyTx.length} local-only transactions to Supabase...`);
+              localOnlyTx.forEach(tx => {
+                syncSingleTransactionToSupabase(tx);
+              });
+            }
+            
+            const merged = [...localOnlyTx, ...res.transactions!];
+            saveStoredTransactions(merged);
+            return merged;
+          });
+        }
+
+        if (res.submissions) {
+          setSubmissions(prevSubmissions => {
+            const fetchedIds = new Set(res.submissions!.map(s => s.id));
+            const pendingLocal = prevSubmissions.filter(s => s.status === 'Pending' && !fetchedIds.has(s.id));
+            
+            // Auto retry syncing local-only pending submissions to Supabase!
+            if (pendingLocal.length > 0) {
+              console.log(`Auto-syncing ${pendingLocal.length} local-only pending submissions to Supabase...`);
+              pendingLocal.forEach(sub => {
+                syncSingleSubmissionToSupabase(sub);
+              });
+            }
+
+            const merged = [...pendingLocal, ...res.submissions!];
+            saveStoredSubmissions(merged);
+            return merged;
+          });
+        }
+
+        const newDbStatus: DatabaseStatus = {
+          connected: true,
+          mode: 'online',
+          lastTested: `Terhubung (${new Date().toLocaleTimeString('id-ID')})`
+        };
+        setDbStatus(newDbStatus);
+        saveStoredDbStatus(newDbStatus);
+      } else if (!res.error) {
+        // Remote database table 'users' is currently empty, push local state to Supabase Cloud
+        const currentLocalUsers = getStoredUsers();
+        const currentLocalWarga = getStoredWarga();
+        const currentLocalTx = getStoredTransactions();
+        const currentLocalSub = getStoredSubmissions();
+        const reconciledWarga = reconcileUsersAndWarga(currentLocalUsers, currentLocalWarga);
+
+        const pushRes = await pushAllLocalDataToSupabase({
+          users: currentLocalUsers,
+          warga: reconciledWarga,
+          transactions: currentLocalTx,
+          submissions: currentLocalSub
+        });
+        if (pushRes.success) {
+          const newDbStatus: DatabaseStatus = {
+            connected: true,
+            mode: 'online',
+            lastTested: `Tersinkron (${new Date().toLocaleTimeString('id-ID')})`
+          };
+          setDbStatus(newDbStatus);
+          saveStoredDbStatus(newDbStatus);
+        }
+      }
+    } catch (e: any) {
+      console.error("Sync catch error:", e);
+    }
+  }, []);
+
   // Initialize and load states on mount
   useEffect(() => {
     document.title = 'CMS04';
@@ -145,58 +247,6 @@ export default function App() {
       }
     }
 
-    const runSync = () => {
-      fetchAllFromSupabase().then(res => {
-        if (res.users && res.users.length > 0) {
-          const fetchedUsers = res.users;
-          const fetchedWarga = res.warga || [];
-          const reconciledWarga = reconcileUsersAndWarga(fetchedUsers, fetchedWarga);
-
-          setUsers(fetchedUsers);
-          saveStoredUsers(fetchedUsers);
-          setWarga(reconciledWarga);
-          saveStoredWarga(reconciledWarga);
-
-          if (res.transactions) { setTransactions(res.transactions); saveStoredTransactions(res.transactions); }
-          if (res.submissions) {
-            setSubmissions(prevSubmissions => {
-              const fetchedIds = new Set(res.submissions!.map(s => s.id));
-              const pendingLocal = prevSubmissions.filter(s => s.status === 'Pending' && !fetchedIds.has(s.id));
-              const merged = [...pendingLocal, ...res.submissions!];
-              saveStoredSubmissions(merged);
-              return merged;
-            });
-          }
-
-          const newDbStatus: DatabaseStatus = {
-            connected: true,
-            mode: 'online',
-            lastTested: `Terhubung (${new Date().toLocaleTimeString('id-ID')})`
-          };
-          setDbStatus(newDbStatus);
-          saveStoredDbStatus(newDbStatus);
-        } else if (!res.error) {
-          // Remote database table 'users' is currently empty, push local state to Supabase Cloud
-          pushAllLocalDataToSupabase({
-            users: initialLocalUsers,
-            warga: syncedLocalWarga,
-            transactions: initialLocalTx,
-            submissions: initialLocalSub
-          }).then(pushRes => {
-            if (pushRes.success) {
-              const newDbStatus: DatabaseStatus = {
-                connected: true,
-                mode: 'online',
-                lastTested: `Tersinkron (${new Date().toLocaleTimeString('id-ID')})`
-              };
-              setDbStatus(newDbStatus);
-              saveStoredDbStatus(newDbStatus);
-            }
-          });
-        }
-      });
-    };
-
     // Run sync immediately on mount
     runSync();
 
@@ -206,7 +256,7 @@ export default function App() {
     return () => {
       clearInterval(intervalId);
     };
-  }, []);
+  }, [runSync]);
 
   // Setup audio notification tone generator using Web Audio API
   const playNotificationSound = () => {
@@ -752,6 +802,8 @@ export default function App() {
             onAddSubmission={handleAddSubmission}
             onApproveSubmission={handleApproveSubmission}
             onRejectSubmission={handleRejectSubmission}
+            onRefreshSync={runSync}
+            dbStatus={dbStatus}
           />
         );
       case 'warga':

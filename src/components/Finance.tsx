@@ -19,9 +19,10 @@ import {
   FileText,
   AlertCircle,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  RefreshCw
 } from 'lucide-react';
-import { User, Warga, FinancialTransaction, PaymentSubmission } from '../types';
+import { User, Warga, FinancialTransaction, PaymentSubmission, DatabaseStatus } from '../types';
 import { formatCurrency, formatDate, getStoredUsers } from '../data/initialData';
 import { compressImageFile } from '../utils/imageCompressor';
 
@@ -34,6 +35,8 @@ interface FinanceProps {
   onAddSubmission?: (newSub: PaymentSubmission) => void;
   onApproveSubmission?: (subId: string, reviewerName: string) => void;
   onRejectSubmission?: (subId: string, reason: string, reviewerName: string) => void;
+  onRefreshSync?: () => Promise<any>;
+  dbStatus?: DatabaseStatus;
 }
 
 // Spelled-out number helper in Indonesian (Terbilang)
@@ -66,7 +69,9 @@ export default function Finance({
   onAddTransaction,
   onAddSubmission,
   onApproveSubmission,
-  onRejectSubmission
+  onRejectSubmission,
+  onRefreshSync,
+  dbStatus
 }: FinanceProps) {
   const isWarga = currentUser.role === 'warga';
 
@@ -226,6 +231,14 @@ export default function Finance({
 
   // Minimize toggle states for RT, Bendahara & Warga (default minimized for clean widescreen layout)
   const [isApprovalQueueOpen, setIsApprovalQueueOpen] = useState(false);
+
+  // Auto-expand approval queue if there are pending submissions
+  useEffect(() => {
+    const hasPending = submissions && submissions.some(s => s.status === 'Pending');
+    if (hasPending) {
+      setIsApprovalQueueOpen(true);
+    }
+  }, [submissions]);
   const [isManualInputOpen, setIsManualInputOpen] = useState(false);
   const [isWargaFormOpen, setIsWargaFormOpen] = useState(false);
   const [isMySubmissionsOpen, setIsMySubmissionsOpen] = useState(false);
@@ -709,15 +722,44 @@ export default function Finance({
             Catatan kas masuk dari iuran warga dan mutasi kas keluar secara terperinci demi asas keterbukaan informasi.
           </p>
         </div>
-        {!isWarga && (
-          <button
-            onClick={exportToExcel}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-lg shadow-amber-500/20 shrink-0 cursor-pointer"
-          >
-            <FileSpreadsheet size={16} />
-            Download Riwayat Transaksi (Excel)
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {onRefreshSync && (
+            <button
+              type="button"
+              onClick={async () => {
+                const btnIcon = document.getElementById('manual-sync-icon');
+                if (btnIcon) btnIcon.classList.add('animate-spin');
+                try {
+                  await onRefreshSync();
+                } catch (e) {
+                  console.error('Manual sync failed:', e);
+                } finally {
+                  setTimeout(() => {
+                    if (btnIcon) btnIcon.classList.remove('animate-spin');
+                  }, 1000);
+                }
+              }}
+              title="Sinkronkan data iuran dan transaksi sekarang dari database Supabase Cloud"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-850 text-amber-400 border border-amber-500/30 font-bold rounded-xl text-xs transition-all shadow-lg shrink-0 cursor-pointer"
+            >
+              <RefreshCw id="manual-sync-icon" size={14} />
+              <span>Refresh & Sync</span>
+              {dbStatus && (
+                <span className={`w-1.5 h-1.5 rounded-full ${dbStatus.connected ? 'bg-amber-400 animate-pulse' : 'bg-slate-500'}`} title={dbStatus.lastTested}></span>
+              )}
+            </button>
+          )}
+
+          {!isWarga && (
+            <button
+              onClick={exportToExcel}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-lg shadow-amber-500/20 shrink-0 cursor-pointer"
+            >
+              <FileSpreadsheet size={16} />
+              Download Riwayat Transaksi (Excel)
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Overview Widget: Total Saldo Kas RT */}
