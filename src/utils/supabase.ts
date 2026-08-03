@@ -155,39 +155,62 @@ export const mapSupabaseToTransaction = (row: any): FinancialTransaction => {
 };
 
 // Map PaymentSubmission
-export const mapSubmissionToSupabase = (sub: PaymentSubmission) => ({
-  id: sub.id,
-  warga_id: sub.wargaId || null,
-  warga_name: sub.wargaName,
-  blok: sub.blok || null,
-  amount: sub.amount,
-  date: sub.date,
-  paid_months: sub.paidMonths ? JSON.stringify(sub.paidMonths) : '[]',
-  proof_image: sub.proofImage || null,
-  status: sub.status,
-  submitted_by: sub.submittedBy || null,
-  submitted_at: sub.submittedAt,
-  rejection_reason: sub.rejectionReason || null,
-  reviewed_by: sub.reviewedBy || null,
-  reviewed_at: sub.reviewedAt || null
-});
+export const mapSubmissionToSupabase = (sub: PaymentSubmission) => {
+  const monthStr = (sub.paidMonths && sub.paidMonths.length > 0)
+    ? sub.paidMonths.join(', ')
+    : (sub.date || 'Januari');
 
-export const mapSupabaseToSubmission = (row: any): PaymentSubmission => ({
-  id: row.id,
-  wargaId: row.warga_id || row.wargaId,
-  wargaName: row.warga_name || row.wargaName,
-  blok: row.blok,
-  amount: Number(row.amount),
-  date: row.date,
-  paidMonths: typeof row.paid_months === 'string' ? JSON.parse(row.paid_months) : (row.paid_months || []),
-  proofImage: row.proof_image || row.proofImage || '',
-  status: row.status,
-  submittedBy: row.submitted_by || row.submittedBy,
-  submittedAt: row.submitted_at || row.submittedAt,
-  rejectionReason: row.rejection_reason || row.rejectionReason,
-  reviewedBy: row.reviewed_by || row.reviewedBy,
-  reviewedAt: row.reviewed_at || row.reviewedAt
-});
+  return {
+    id: sub.id,
+    warga_id: sub.wargaId || null,
+    warga_name: sub.wargaName,
+    blok: sub.blok || null,
+    amount: sub.amount,
+    date: sub.date,
+    month: monthStr, // Fixes: null value in column "month" violates not-null constraint
+    months: monthStr,
+    paid_months: sub.paidMonths ? JSON.stringify(sub.paidMonths) : '[]',
+    proof_image: sub.proofImage || null,
+    status: sub.status,
+    submitted_by: sub.submittedBy || null,
+    submitted_at: sub.submittedAt || new Date().toISOString(),
+    rejection_reason: sub.rejectionReason || null,
+    reviewed_by: sub.reviewedBy || null,
+    reviewed_at: sub.reviewedAt || null
+  };
+};
+
+export const mapSupabaseToSubmission = (row: any): PaymentSubmission => {
+  let paidMonths: string[] = [];
+  if (row.paid_months) {
+    try {
+      paidMonths = typeof row.paid_months === 'string' ? JSON.parse(row.paid_months) : row.paid_months;
+    } catch (e) {
+      paidMonths = [row.paid_months];
+    }
+  } else if (row.months) {
+    paidMonths = typeof row.months === 'string' ? row.months.split(',').map((s: string) => s.trim()) : row.months;
+  } else if (row.month) {
+    paidMonths = typeof row.month === 'string' ? row.month.split(',').map((s: string) => s.trim()) : [row.month];
+  }
+
+  return {
+    id: row.id,
+    wargaId: row.warga_id || row.wargaId,
+    wargaName: row.warga_name || row.wargaName,
+    blok: row.blok,
+    amount: Number(row.amount),
+    date: row.date,
+    paidMonths: paidMonths || [],
+    proofImage: row.proof_image || row.proofImage || '',
+    status: row.status,
+    submittedBy: row.submitted_by || row.submittedBy,
+    submittedAt: row.submitted_at || row.submittedAt,
+    rejectionReason: row.rejection_reason || row.rejectionReason,
+    reviewedBy: row.reviewed_by || row.reviewedBy,
+    reviewedAt: row.reviewed_at || row.reviewedAt
+  };
+};
 
 // --- API ACTIONS ---
 
