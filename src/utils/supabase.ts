@@ -96,6 +96,7 @@ export const mapSupabaseToWarga = (row: any): Warga => ({
 export const mapTransactionToSupabase = (tx: FinancialTransaction) => ({
   id: tx.id,
   type: tx.type,
+  category: tx.category || (tx.type === 'Pemasukan' ? 'Iuran Warga' : 'Pengeluaran/Operasional'),
   warga_name: tx.wargaName || null,
   recipient: tx.recipient || null,
   amount: tx.amount,
@@ -108,6 +109,7 @@ export const mapTransactionToSupabase = (tx: FinancialTransaction) => ({
 export const mapSupabaseToTransaction = (row: any): FinancialTransaction => ({
   id: row.id,
   type: row.type,
+  category: row.category || (row.type === 'Pemasukan' ? 'Iuran Warga' : 'Pengeluaran/Operasional'),
   wargaName: row.warga_name || row.wargaName,
   recipient: row.recipient,
   amount: Number(row.amount),
@@ -365,5 +367,45 @@ export const deleteWargaFromSupabase = async (wargaId: string) => {
     await client.from('warga').delete().eq('id', wargaId);
   } catch (e) {
     console.error('Error deleting warga from Supabase:', e);
+  }
+};
+
+export const syncSingleTransactionToSupabase = async (tx: FinancialTransaction) => {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await safeUpsert(client, 'financial_transactions', [mapTransactionToSupabase(tx)]);
+  } catch (e) {
+    console.error('Error syncing transaction to Supabase:', e);
+  }
+};
+
+export const deleteTransactionFromSupabase = async (txId: string) => {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await client.from('financial_transactions').delete().eq('id', txId);
+  } catch (e) {
+    console.error('Error deleting transaction from Supabase:', e);
+  }
+};
+
+export const syncSingleSubmissionToSupabase = async (sub: PaymentSubmission) => {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await safeUpsert(client, 'payment_submissions', [mapSubmissionToSupabase(sub)]);
+  } catch (e) {
+    console.error('Error syncing payment submission to Supabase:', e);
+  }
+};
+
+export const deleteSubmissionFromSupabase = async (subId: string) => {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await client.from('payment_submissions').delete().eq('id', subId);
+  } catch (e) {
+    console.error('Error deleting payment submission from Supabase:', e);
   }
 };
