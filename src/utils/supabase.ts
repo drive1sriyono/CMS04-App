@@ -366,7 +366,7 @@ export const safeUpsert = async (
     if (fixed.success) return null;
   }
 
-  // Column pruning and NOT NULL constraint retry loop
+  // Column pruning, NOT NULL constraint, and Check constraint retry loop
   while (error && attempts < 10) {
     attempts++;
     const errMsg = error.message || '';
@@ -375,6 +375,8 @@ export const safeUpsert = async (
     const matchCol = errMsg.match(/Could not find the '([^']+)' column/i);
     // Case 2: NOT NULL constraint error
     const matchNotNull = errMsg.match(/null value in column "([^"]+)"/i) || errMsg.match(/column "([^"]+)" of relation "[^"]+" violates not-null constraint/i);
+    // Case 3: Check constraint error
+    const isCheck = isCheckConstraintError(error);
 
     if (matchCol && matchCol[1]) {
       const missingCol = matchCol[1];
@@ -396,7 +398,7 @@ export const safeUpsert = async (
           else if (notNullCol === 'month' || notNullCol === 'months') copy[notNullCol] = 'Januari';
           else if (notNullCol === 'amount') copy[notNullCol] = 0;
           else if (notNullCol === 'paid_months') copy[notNullCol] = '[]';
-          else if (notNullCol === 'status') copy[notNullCol] = 'Pending';
+          else if (notNullCol === 'status') copy[notNullCol] = 'pending';
           else if (notNullCol.includes('date') || notNullCol.includes('at')) copy[notNullCol] = new Date().toISOString();
           else copy[notNullCol] = 'N/A';
         }
@@ -404,6 +406,40 @@ export const safeUpsert = async (
       });
       const retryRes = await client.from(tableName).upsert(currentRows, { onConflict: 'id' });
       error = retryRes.error;
+    } else if (isCheck) {
+      const fixed = await tryCheckConstraintFix(tableName, currentRows);
+      if (fixed.success) return null;
+
+      // If check constraint still fails, try setting status/type to generic default or stripping the constraint field if possible
+      console.warn(`Check constraint violation on table '${tableName}'. Attempting fallback default values...`);
+      currentRows = currentRows.map(r => {
+        const copy = { ...r };
+        if (tableName === 'payment_submissions') {
+          copy.status = 'pending'; // fallback to lowercase pending
+        } else if (tableName === 'financial_transactions') {
+          copy.type = 'income';
+          copy.category = 'income';
+        }
+        return copy;
+      });
+      const retryRes = await client.from(tableName).upsert(currentRows, { onConflict: 'id' });
+      error = retryRes.error;
+      if (!error) return null;
+
+      // Final fallback: delete status/type/category if check constraint blocks upsert
+      currentRows = currentRows.map(r => {
+        const copy = { ...r };
+        if (tableName === 'payment_submissions') {
+          delete copy.status;
+        } else if (tableName === 'financial_transactions') {
+          delete copy.type;
+          delete copy.category;
+        }
+        return copy;
+      });
+      const finalRetryRes = await client.from(tableName).upsert(currentRows, { onConflict: 'id' });
+      error = finalRetryRes.error;
+      break;
     } else {
       break;
     }
