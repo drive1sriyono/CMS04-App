@@ -7,7 +7,7 @@ import {
   TrendingUp,
   ShieldCheck
 } from 'lucide-react';
-import { User, Warga, FinancialTransaction, PaymentSubmission } from '../types';
+import { User, Warga, FinancialTransaction, PaymentSubmission, DatabaseStatus } from '../types';
 import { formatCurrency } from '../data/initialData';
 
 interface DashboardProps {
@@ -15,6 +15,7 @@ interface DashboardProps {
   warga: Warga[];
   transactions: FinancialTransaction[];
   submissions?: PaymentSubmission[];
+  dbStatus?: DatabaseStatus;
 }
 
 const ALL_MONTHS_2026 = [
@@ -32,7 +33,7 @@ interface MonthlyData {
   saldo: number;
 }
 
-export default function Dashboard({ currentUser, warga, transactions, submissions = [] }: DashboardProps) {
+export default function Dashboard({ currentUser, warga, transactions, submissions = [], dbStatus }: DashboardProps) {
   const [hoveredBar, setHoveredBar] = useState<{ month: string; type: string; value: number } | null>(null);
 
   // 1. Calculate stats
@@ -189,10 +190,10 @@ export default function Dashboard({ currentUser, warga, transactions, submission
           </div>
 
           <div className="text-right shrink-0">
-            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest block">Status Sistem Enkripsi</span>
+            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest block">Sinkronisasi Terakhir</span>
             <span className="inline-flex items-center gap-2 text-xs text-amber-300 bg-slate-950/90 px-4 py-1.5 rounded-full border border-amber-500/40 font-bold mt-1 shadow-md">
               <ShieldCheck size={14} className="text-amber-400" />
-              Sistem Aktif & Terverifikasi
+              {dbStatus?.lastTested ? dbStatus.lastTested : 'Terhubung'}
             </span>
           </div>
         </div>

@@ -142,51 +142,59 @@ export default function App() {
       }
     }
 
-    // Real-time Sync with Supabase
-    fetchAllFromSupabase().then(res => {
-      if (res.users && res.users.length > 0) {
-        const fetchedUsers = res.users;
-        const fetchedWarga = res.warga || [];
-        const reconciledWarga = reconcileUsersAndWarga(fetchedUsers, fetchedWarga);
+    const runSync = () => {
+      fetchAllFromSupabase().then(res => {
+        if (res.users && res.users.length > 0) {
+          const fetchedUsers = res.users;
+          const fetchedWarga = res.warga || [];
+          const reconciledWarga = reconcileUsersAndWarga(fetchedUsers, fetchedWarga);
 
-        setUsers(fetchedUsers);
-        saveStoredUsers(fetchedUsers);
-        setWarga(reconciledWarga);
-        saveStoredWarga(reconciledWarga);
+          setUsers(fetchedUsers);
+          saveStoredUsers(fetchedUsers);
+          setWarga(reconciledWarga);
+          saveStoredWarga(reconciledWarga);
 
-        // Sync reconciled Warga items to Supabase
-        reconciledWarga.forEach(w => syncSingleWargaToSupabase(w));
+          if (res.transactions) { setTransactions(res.transactions); saveStoredTransactions(res.transactions); }
+          if (res.submissions) { setSubmissions(res.submissions); saveStoredSubmissions(res.submissions); }
 
-        if (res.transactions) { setTransactions(res.transactions); saveStoredTransactions(res.transactions); }
-        if (res.submissions) { setSubmissions(res.submissions); saveStoredSubmissions(res.submissions); }
+          const newDbStatus: DatabaseStatus = {
+            connected: true,
+            mode: 'online',
+            lastTested: `Terhubung (${new Date().toLocaleTimeString('id-ID')})`
+          };
+          setDbStatus(newDbStatus);
+          saveStoredDbStatus(newDbStatus);
+        } else if (!res.error) {
+          // Remote database table 'users' is currently empty, push local state to Supabase Cloud
+          pushAllLocalDataToSupabase({
+            users: initialLocalUsers,
+            warga: syncedLocalWarga,
+            transactions: initialLocalTx,
+            submissions: initialLocalSub
+          }).then(pushRes => {
+            if (pushRes.success) {
+              const newDbStatus: DatabaseStatus = {
+                connected: true,
+                mode: 'online',
+                lastTested: `Tersinkron (${new Date().toLocaleTimeString('id-ID')})`
+              };
+              setDbStatus(newDbStatus);
+              saveStoredDbStatus(newDbStatus);
+            }
+          });
+        }
+      });
+    };
 
-        const newDbStatus: DatabaseStatus = {
-          connected: true,
-          mode: 'online',
-          lastTested: `Terhubung (${new Date().toLocaleTimeString('id-ID')})`
-        };
-        setDbStatus(newDbStatus);
-        saveStoredDbStatus(newDbStatus);
-      } else if (!res.error) {
-        // Remote database table 'users' is currently empty, push local state to Supabase Cloud
-        pushAllLocalDataToSupabase({
-          users: initialLocalUsers,
-          warga: syncedLocalWarga,
-          transactions: initialLocalTx,
-          submissions: initialLocalSub
-        }).then(pushRes => {
-          if (pushRes.success) {
-            const newDbStatus: DatabaseStatus = {
-              connected: true,
-              mode: 'online',
-              lastTested: `Tersinkron (${new Date().toLocaleTimeString('id-ID')})`
-            };
-            setDbStatus(newDbStatus);
-            saveStoredDbStatus(newDbStatus);
-          }
-        });
-      }
-    });
+    // Run sync immediately on mount
+    runSync();
+
+    // Setup background periodic synchronization (every 5 seconds)
+    const intervalId = setInterval(runSync, 5000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
   }, []);
 
   // Sync personal profile modifications instantly to currentUser session state & Supabase
@@ -548,7 +556,7 @@ export default function App() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard currentUser={currentUser} warga={warga} transactions={transactions} submissions={submissions} />;
+        return <Dashboard currentUser={currentUser} warga={warga} transactions={transactions} submissions={submissions} dbStatus={dbStatus} />;
       case 'profile':
         return (
           <MyProfile 
@@ -586,7 +594,7 @@ export default function App() {
         );
       case 'users':
         if (currentUser.role !== 'admin' && currentUser.role !== 'RT') {
-          return <Dashboard currentUser={currentUser} warga={warga} transactions={transactions} submissions={submissions} />;
+          return <Dashboard currentUser={currentUser} warga={warga} transactions={transactions} submissions={submissions} dbStatus={dbStatus} />;
         }
         return (
           <UserManagement 
@@ -602,7 +610,7 @@ export default function App() {
         );
       case 'backup':
         if (currentUser.role !== 'admin') {
-          return <Dashboard currentUser={currentUser} warga={warga} transactions={transactions} submissions={submissions} />;
+          return <Dashboard currentUser={currentUser} warga={warga} transactions={transactions} submissions={submissions} dbStatus={dbStatus} />;
         }
         return (
           <BackupRestore 
@@ -616,7 +624,7 @@ export default function App() {
           />
         );
       default:
-        return <Dashboard currentUser={currentUser} warga={warga} transactions={transactions} submissions={submissions} />;
+        return <Dashboard currentUser={currentUser} warga={warga} transactions={transactions} submissions={submissions} dbStatus={dbStatus} />;
     }
   };
 
