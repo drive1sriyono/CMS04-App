@@ -487,6 +487,7 @@ export default function Finance({
     const newTx: FinancialTransaction = {
       id: `tx-${Date.now()}`,
       type: txType,
+      category: txType === 'Pemasukan' ? (pemasukanCategory === 'iuran' ? 'Iuran Warga' : 'Donasi/Lainnya') : 'Pengeluaran/Operasional',
       amount: Number(amount),
       date,
       description: description.trim(),
