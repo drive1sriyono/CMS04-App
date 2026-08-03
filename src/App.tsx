@@ -158,7 +158,15 @@ export default function App() {
           saveStoredWarga(reconciledWarga);
 
           if (res.transactions) { setTransactions(res.transactions); saveStoredTransactions(res.transactions); }
-          if (res.submissions) { setSubmissions(res.submissions); saveStoredSubmissions(res.submissions); }
+          if (res.submissions) {
+            setSubmissions(prevSubmissions => {
+              const fetchedIds = new Set(res.submissions!.map(s => s.id));
+              const pendingLocal = prevSubmissions.filter(s => s.status === 'Pending' && !fetchedIds.has(s.id));
+              const merged = [...pendingLocal, ...res.submissions!];
+              saveStoredSubmissions(merged);
+              return merged;
+            });
+          }
 
           const newDbStatus: DatabaseStatus = {
             connected: true,

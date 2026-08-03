@@ -402,6 +402,9 @@ export const fetchAllFromSupabase = async (): Promise<{
     ]);
 
     if (usersRes.error) throw usersRes.error;
+    if (wargaRes.error) throw wargaRes.error;
+    if (txRes.error) throw txRes.error;
+    if (subRes.error) throw subRes.error;
 
     return {
       users: usersRes.data ? usersRes.data.map(mapSupabaseToUser) : [],
