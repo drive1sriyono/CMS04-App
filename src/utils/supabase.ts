@@ -454,3 +454,43 @@ export const deleteWargaFromSupabase = async (wargaId: string) => {
     console.error('Error deleting warga from Supabase:', e);
   }
 };
+
+export const syncSingleTransactionToSupabase = async (tx: FinancialTransaction) => {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await safeUpsert(client, 'financial_transactions', [mapTransactionToSupabase(tx)]);
+  } catch (e) {
+    console.error('Error syncing transaction to Supabase:', e);
+  }
+};
+
+export const deleteTransactionFromSupabase = async (txId: string) => {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await client.from('financial_transactions').delete().eq('id', txId);
+  } catch (e) {
+    console.error('Error deleting transaction from Supabase:', e);
+  }
+};
+
+export const syncSingleSubmissionToSupabase = async (sub: PaymentSubmission) => {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await safeUpsert(client, 'payment_submissions', [mapSubmissionToSupabase(sub)]);
+  } catch (e) {
+    console.error('Error syncing submission to Supabase:', e);
+  }
+};
+
+export const deleteSubmissionFromSupabase = async (subId: string) => {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await client.from('payment_submissions').delete().eq('id', subId);
+  } catch (e) {
+    console.error('Error deleting submission from Supabase:', e);
+  }
+};

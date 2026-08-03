@@ -41,6 +41,10 @@ import {
   deleteUserFromSupabase,
   syncSingleWargaToSupabase,
   deleteWargaFromSupabase,
+  syncSingleTransactionToSupabase,
+  deleteTransactionFromSupabase,
+  syncSingleSubmissionToSupabase,
+  deleteSubmissionFromSupabase,
   getSupabaseClient
 } from './utils/supabase';
 
@@ -333,6 +337,10 @@ export default function App() {
     setWarga(updatedW);
     saveStoredWarga(updatedW);
 
+    if (targetWarga) {
+      deleteWargaFromSupabase(targetWarga.id);
+    }
+
     // Also remove matching user account to avoid orphan credentials
     const updatedUsers = users.filter(u => {
       if (u.id === id) return false;
@@ -342,6 +350,16 @@ export default function App() {
     });
     setUsers(updatedUsers);
     saveStoredUsers(updatedUsers);
+
+    const targetUser = users.find(u => {
+      if (u.id === id) return true;
+      if (targetName && u.fullName.toLowerCase().trim() === targetName) return true;
+      if (targetUsername && u.username && u.username.toLowerCase().trim() === targetUsername) return true;
+      return false;
+    });
+    if (targetUser) {
+      deleteUserFromSupabase(targetUser.id);
+    }
   };
 
   // Add financial transaction
@@ -349,6 +367,7 @@ export default function App() {
     const updatedTx = [...transactions, newTx];
     setTransactions(updatedTx);
     saveStoredTransactions(updatedTx);
+    syncSingleTransactionToSupabase(newTx);
 
     // Dynamic auto-action: If it is a Pemasukan related to a citizen payment,
     // let's set their citizen iuran status to 'Lunas'!
@@ -374,6 +393,7 @@ export default function App() {
     const updated = [newSub, ...submissions];
     setSubmissions(updated);
     saveStoredSubmissions(updated);
+    syncSingleSubmissionToSupabase(newSub);
   };
 
   const handleApproveSubmission = (subId: string, reviewerName: string) => {
@@ -395,6 +415,11 @@ export default function App() {
     setSubmissions(updatedSubmissions);
     saveStoredSubmissions(updatedSubmissions);
 
+    const approvedSub = updatedSubmissions.find(s => s.id === subId);
+    if (approvedSub) {
+      syncSingleSubmissionToSupabase(approvedSub);
+    }
+
     // 2. Convert submission to official FinancialTransaction
     const newTx: FinancialTransaction = {
       id: `tx-approved-${Date.now()}`,
@@ -411,6 +436,7 @@ export default function App() {
     const updatedTx = [...transactions, newTx];
     setTransactions(updatedTx);
     saveStoredTransactions(updatedTx);
+    syncSingleTransactionToSupabase(newTx);
 
     // 3. Sync Citizen's paidMonths array and statusIuran
     const match = warga.find(w => 
@@ -442,6 +468,11 @@ export default function App() {
     });
     setSubmissions(updatedSubmissions);
     saveStoredSubmissions(updatedSubmissions);
+
+    const rejectedSub = updatedSubmissions.find(s => s.id === subId);
+    if (rejectedSub) {
+      syncSingleSubmissionToSupabase(rejectedSub);
+    }
   };
 
   // Backup state restore
