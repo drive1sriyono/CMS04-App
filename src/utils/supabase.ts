@@ -92,32 +92,52 @@ export const mapSupabaseToWarga = (row: any): Warga => ({
   paidMonths: typeof row.paid_months === 'string' ? JSON.parse(row.paid_months) : (row.paid_months || [])
 });
 
-// Map JS FinancialTransaction to SQL
-export const mapTransactionToSupabase = (tx: FinancialTransaction) => ({
-  id: tx.id,
-  type: tx.type,
-  category: tx.category || (tx.type === 'Pemasukan' ? 'Iuran Warga' : 'Pengeluaran/Operasional'),
-  warga_name: tx.wargaName || null,
-  recipient: tx.recipient || null,
-  amount: tx.amount,
-  date: tx.date,
-  description: tx.description || '',
-  proof_image: tx.proofImage || null,
-  paid_months: tx.paidMonths ? JSON.stringify(tx.paidMonths) : '[]'
-});
+export const sanitizeTransactionType = (rawType: any): 'Pemasukan' | 'Pengeluaran' => {
+  if (!rawType) return 'Pemasukan';
+  const str = String(rawType).trim().toLowerCase();
+  if (str === 'pengeluaran' || str === 'expense' || str === 'keluar' || str === 'out') {
+    return 'Pengeluaran';
+  }
+  return 'Pemasukan';
+};
 
-export const mapSupabaseToTransaction = (row: any): FinancialTransaction => ({
-  id: row.id,
-  type: row.type,
-  category: row.category || (row.type === 'Pemasukan' ? 'Iuran Warga' : 'Pengeluaran/Operasional'),
-  wargaName: row.warga_name || row.wargaName,
-  recipient: row.recipient,
-  amount: Number(row.amount),
-  date: row.date,
-  description: row.description || '',
-  proofImage: row.proof_image || row.proofImage,
-  paidMonths: typeof row.paid_months === 'string' ? JSON.parse(row.paid_months) : (row.paid_months || [])
-});
+// Map JS FinancialTransaction to SQL
+export const mapTransactionToSupabase = (tx: FinancialTransaction) => {
+  const type = sanitizeTransactionType(tx.type);
+  return {
+    id: tx.id || `tx-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+    type: type,
+    category: tx.category || (type === 'Pemasukan' ? 'Iuran Warga' : 'Pengeluaran/Operasional'),
+    warga_name: tx.wargaName || null,
+    recipient: tx.recipient || null,
+    amount: Number(tx.amount) || 0,
+    date: tx.date || new Date().toISOString().split('T')[0],
+    description: tx.description || '',
+    proof_image: tx.proofImage || null,
+    paid_months: tx.paidMonths ? JSON.stringify(tx.paidMonths) : '[]'
+  };
+};
+
+export const mapSupabaseToTransaction = (row: any): FinancialTransaction => {
+  const rawType = String(row.type || '').toLowerCase();
+  const type: 'Pemasukan' | 'Pengeluaran' = 
+    (rawType === 'pengeluaran' || rawType === 'expense' || rawType === 'keluar' || rawType === 'out')
+      ? 'Pengeluaran'
+      : 'Pemasukan';
+
+  return {
+    id: String(row.id),
+    type: type,
+    category: row.category || (type === 'Pemasukan' ? 'Iuran Warga' : 'Pengeluaran/Operasional'),
+    wargaName: row.warga_name || row.wargaName || undefined,
+    recipient: row.recipient || undefined,
+    amount: Number(row.amount) || 0,
+    date: row.date || new Date().toISOString().split('T')[0],
+    description: row.description || '',
+    proofImage: row.proof_image || row.proofImage || undefined,
+    paidMonths: typeof row.paid_months === 'string' ? JSON.parse(row.paid_months) : (row.paid_months || [])
+  };
+};
 
 // Map PaymentSubmission
 export const mapSubmissionToSupabase = (sub: PaymentSubmission) => ({
@@ -205,7 +225,7 @@ export const testSupabaseRealConnection = async (): Promise<{ success: boolean; 
   }
 };
 
-// Helper to perform upsert with automatic column pruning if schema is missing optional columns
+// Helper to perform upsert with automatic column pruning and constraint resolution
 export const safeUpsert = async (
   client: SupabaseClient,
   tableName: string,
@@ -218,13 +238,14 @@ export const safeUpsert = async (
   let error = res.error;
   if (!error) return null;
 
-  // If error mentions missing column (e.g. "Could not find the 'birth_date' column...")
   let currentRows = rows.map(r => ({ ...r }));
   let attempts = 0;
 
   while (error && attempts < 10) {
     attempts++;
     const errMsg = error.message || '';
+
+    // 1. Missing column handling (e.g. "Could not find the 'birth_date' column...")
     const match = errMsg.match(/Could not find the '([^']+)' column/i);
     if (match && match[1]) {
       const missingCol = match[1];
@@ -236,9 +257,38 @@ export const safeUpsert = async (
       });
       const retryRes = await client.from(tableName).upsert(currentRows, { onConflict: 'id' });
       error = retryRes.error;
-    } else {
-      break;
+      continue;
     }
+
+    // 2. Handling check constraint on financial_transactions type (e.g. "financial_transactions_type_check")
+    if (tableName === 'financial_transactions' && (errMsg.includes('type_check') || errMsg.includes('check constraint') || errMsg.includes('violates check constraint'))) {
+      if (attempts === 1) {
+        console.warn(`Check constraint on 'type' failed. Retrying with lowercase ('pemasukan'/'pengeluaran')...`);
+        currentRows = currentRows.map(r => ({
+          ...r,
+          type: r.type === 'Pengeluaran' ? 'pengeluaran' : 'pemasukan'
+        }));
+      } else if (attempts === 2) {
+        console.warn(`Check constraint on 'type' failed. Retrying with English ('income'/'expense')...`);
+        currentRows = currentRows.map(r => ({
+          ...r,
+          type: (r.type === 'pengeluaran' || r.type === 'Pengeluaran') ? 'expense' : 'income'
+        }));
+      } else if (attempts === 3) {
+        console.warn(`Check constraint on 'type' failed. Retrying with uppercase ('PEMASUKAN'/'PENGELUARAN')...`);
+        currentRows = currentRows.map(r => ({
+          ...r,
+          type: (r.type === 'expense' || r.type === 'pengeluaran' || r.type === 'Pengeluaran') ? 'PENGELUARAN' : 'PEMASUKAN'
+        }));
+      } else {
+        break;
+      }
+      const retryRes = await client.from(tableName).upsert(currentRows, { onConflict: 'id' });
+      error = retryRes.error;
+      continue;
+    }
+
+    break;
   }
 
   return error;
