@@ -17,6 +17,22 @@ export const getSupabaseConfig = () => {
   return { url: url.trim().replace(/\/+$/, ''), key: key.trim() };
 };
 
+export const saveSupabaseCredentials = (url: string, key: string) => {
+  if (url && url.trim()) {
+    localStorage.setItem('supabase_url', url.trim());
+  } else {
+    localStorage.removeItem('supabase_url');
+  }
+
+  if (key && key.trim()) {
+    localStorage.setItem('supabase_anon_key', key.trim());
+  } else {
+    localStorage.removeItem('supabase_anon_key');
+  }
+
+  cachedClient = null; // Clear cached client so next call uses new credentials
+};
+
 export const getSupabaseClient = (): SupabaseClient | null => {
   const { url, key } = getSupabaseConfig();
   if (!url || !url.startsWith('http')) return null;
@@ -418,13 +434,16 @@ export const fetchAllFromSupabase = async (): Promise<{
 };
 
 // Single Item Realtime Push Helpers
-export const syncSingleUserToSupabase = async (user: User) => {
+export const syncSingleUserToSupabase = async (user: User): Promise<{ success: boolean; error?: string }> => {
   const client = getSupabaseClient();
-  if (!client) return;
+  if (!client) return { success: false, error: 'Klien Supabase belum diinisialisasi atau key belum terpasang.' };
   try {
-    await safeUpsert(client, 'users', [mapUserToSupabase(user)]);
-  } catch (e) {
+    const err = await safeUpsert(client, 'users', [mapUserToSupabase(user)]);
+    if (err) return { success: false, error: err.message };
+    return { success: true };
+  } catch (e: any) {
     console.error('Error syncing user to Supabase:', e);
+    return { success: false, error: e.message };
   }
 };
 
@@ -438,13 +457,16 @@ export const deleteUserFromSupabase = async (userId: string) => {
   }
 };
 
-export const syncSingleWargaToSupabase = async (warga: Warga) => {
+export const syncSingleWargaToSupabase = async (warga: Warga): Promise<{ success: boolean; error?: string }> => {
   const client = getSupabaseClient();
-  if (!client) return;
+  if (!client) return { success: false, error: 'Klien Supabase belum diinisialisasi.' };
   try {
-    await safeUpsert(client, 'warga', [mapWargaToSupabase(warga)]);
-  } catch (e) {
+    const err = await safeUpsert(client, 'warga', [mapWargaToSupabase(warga)]);
+    if (err) return { success: false, error: err.message };
+    return { success: true };
+  } catch (e: any) {
     console.error('Error syncing warga to Supabase:', e);
+    return { success: false, error: e.message };
   }
 };
 
@@ -458,13 +480,16 @@ export const deleteWargaFromSupabase = async (wargaId: string) => {
   }
 };
 
-export const syncSingleTransactionToSupabase = async (tx: FinancialTransaction) => {
+export const syncSingleTransactionToSupabase = async (tx: FinancialTransaction): Promise<{ success: boolean; error?: string }> => {
   const client = getSupabaseClient();
-  if (!client) return;
+  if (!client) return { success: false, error: 'Klien Supabase belum diinisialisasi.' };
   try {
-    await safeUpsert(client, 'financial_transactions', [mapTransactionToSupabase(tx)]);
-  } catch (e) {
+    const err = await safeUpsert(client, 'financial_transactions', [mapTransactionToSupabase(tx)]);
+    if (err) return { success: false, error: err.message };
+    return { success: true };
+  } catch (e: any) {
     console.error('Error syncing transaction to Supabase:', e);
+    return { success: false, error: e.message };
   }
 };
 
@@ -478,13 +503,16 @@ export const deleteTransactionFromSupabase = async (txId: string) => {
   }
 };
 
-export const syncSingleSubmissionToSupabase = async (sub: PaymentSubmission) => {
+export const syncSingleSubmissionToSupabase = async (sub: PaymentSubmission): Promise<{ success: boolean; error?: string }> => {
   const client = getSupabaseClient();
-  if (!client) return;
+  if (!client) return { success: false, error: 'Klien Supabase belum diinisialisasi.' };
   try {
-    await safeUpsert(client, 'payment_submissions', [mapSubmissionToSupabase(sub)]);
-  } catch (e) {
+    const err = await safeUpsert(client, 'payment_submissions', [mapSubmissionToSupabase(sub)]);
+    if (err) return { success: false, error: err.message };
+    return { success: true };
+  } catch (e: any) {
     console.error('Error syncing submission to Supabase:', e);
+    return { success: false, error: e.message };
   }
 };
 

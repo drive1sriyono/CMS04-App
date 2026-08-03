@@ -117,6 +117,19 @@ export default function App() {
     return updatedWarga;
   };
 
+  // Helper to notify other open tabs on same device
+  const notifyBroadcast = () => {
+    try {
+      if ('BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('rt_digital_sync_channel');
+        bc.postMessage({ type: 'DATA_UPDATED', timestamp: Date.now() });
+        bc.close();
+      }
+    } catch (e) {
+      console.error('BroadcastChannel error:', e);
+    }
+  };
+
   // Synchronize data with Supabase Cloud
   const runSync = useCallback(async () => {
     try {
@@ -179,6 +192,69 @@ export default function App() {
 
             const merged = [...pendingLocal, ...res.submissions!];
             saveStoredSubmissions(merged);
+
+            // Reconcile Warga and Transactions with any Approved submissions received from Cloud
+            const approvedSubs = merged.filter(s => s.status === 'Approved');
+            if (approvedSubs.length > 0) {
+              setWarga(prevWarga => {
+                let changed = false;
+                const updatedWargaList = prevWarga.map(w => {
+                  let monthsSet = new Set(w.paidMonths || []);
+                  approvedSubs.forEach(sub => {
+                    const isMatch = (
+                      (sub.wargaId && w.id === sub.wargaId) ||
+                      w.fullName.toLowerCase().trim() === sub.wargaName.toLowerCase().trim() ||
+                      (w.username && sub.wargaName && w.username.toLowerCase().trim() === sub.wargaName.toLowerCase().trim()) ||
+                      (sub.submittedBy && w.username && w.username.toLowerCase().trim() === sub.submittedBy.toLowerCase().trim())
+                    );
+                    if (isMatch && sub.paidMonths) {
+                      sub.paidMonths.forEach(m => {
+                        if (!monthsSet.has(m)) {
+                          monthsSet.add(m);
+                          changed = true;
+                        }
+                      });
+                    }
+                  });
+                  if (changed) {
+                    return { ...w, paidMonths: Array.from(monthsSet), statusIuran: 'Lunas' as const };
+                  }
+                  return w;
+                });
+                if (changed) {
+                  saveStoredWarga(updatedWargaList);
+                }
+                return updatedWargaList;
+              });
+
+              setTransactions(prevTx => {
+                let changed = false;
+                const newTxList = [...prevTx];
+                approvedSubs.forEach(sub => {
+                  const subTxId = `tx-approved-${sub.id}`;
+                  const exists = newTxList.some(t => t.id === subTxId || (t.wargaName === sub.wargaName && t.amount === sub.amount && t.date === sub.date));
+                  if (!exists) {
+                    newTxList.push({
+                      id: subTxId,
+                      type: 'Pemasukan',
+                      amount: sub.amount,
+                      date: sub.date,
+                      description: `Iuran Bulanan RT (Verifikasi Online) - ${sub.paidMonths.join(', ')}`,
+                      proofImage: sub.proofImage,
+                      wargaId: sub.wargaId,
+                      wargaName: sub.wargaName,
+                      paidMonths: sub.paidMonths
+                    });
+                    changed = true;
+                  }
+                });
+                if (changed) {
+                  saveStoredTransactions(newTxList);
+                }
+                return newTxList;
+              });
+            }
+
             return merged;
           });
         }
@@ -250,11 +326,27 @@ export default function App() {
     // Run sync immediately on mount
     runSync();
 
-    // Setup background periodic synchronization (every 5 seconds)
-    const intervalId = setInterval(runSync, 5000);
+    // Setup background periodic synchronization (every 3 seconds for fast multi-device sync)
+    const intervalId = setInterval(runSync, 3000);
+
+    // BroadcastChannel listener for multi-tab instant sync
+    let bc: BroadcastChannel | null = null;
+    if ('BroadcastChannel' in window) {
+      try {
+        bc = new BroadcastChannel('rt_digital_sync_channel');
+        bc.onmessage = (event) => {
+          if (event.data?.type === 'DATA_UPDATED') {
+            runSync();
+          }
+        };
+      } catch (e) {
+        console.error(e);
+      }
+    }
 
     return () => {
       clearInterval(intervalId);
+      if (bc) bc.close();
     };
   }, [runSync]);
 
@@ -610,14 +702,27 @@ export default function App() {
   };
 
   // Submission action handlers (Warga submission & RT/Bendahara approval)
-  const handleAddSubmission = (newSub: PaymentSubmission) => {
+  const handleAddSubmission = async (newSub: PaymentSubmission) => {
     const updated = [newSub, ...submissions];
     setSubmissions(updated);
     saveStoredSubmissions(updated);
-    syncSingleSubmissionToSupabase(newSub);
+    notifyBroadcast();
+    
+    const subRes = await syncSingleSubmissionToSupabase(newSub);
+    if (!subRes.success) {
+      setActiveToasts(prev => [
+        ...prev,
+        {
+          id: `toast-sub-err-${Date.now()}`,
+          title: 'Perhatian: Offline/Gagal Sync',
+          message: `Pengajuan tersimpan di perangkat ini, tetapi gagal terkirim ke Cloud Supabase (${subRes.error || 'Cek Koneksi'}).`,
+          type: 'info'
+        }
+      ]);
+    }
   };
 
-  const handleApproveSubmission = (subId: string, reviewerName: string) => {
+  const handleApproveSubmission = async (subId: string, reviewerName: string) => {
     const targetSub = submissions.find(s => s.id === subId);
     if (!targetSub) return;
 
@@ -637,13 +742,10 @@ export default function App() {
     saveStoredSubmissions(updatedSubmissions);
 
     const approvedSub = updatedSubmissions.find(s => s.id === subId);
-    if (approvedSub) {
-      syncSingleSubmissionToSupabase(approvedSub);
-    }
 
     // 2. Convert submission to official FinancialTransaction
     const newTx: FinancialTransaction = {
-      id: `tx-approved-${Date.now()}`,
+      id: `tx-approved-${targetSub.id}`,
       type: 'Pemasukan',
       amount: targetSub.amount,
       date: targetSub.date,
@@ -654,10 +756,9 @@ export default function App() {
       paidMonths: targetSub.paidMonths
     };
 
-    const updatedTx = [...transactions, newTx];
+    const updatedTx = [...transactions.filter(t => t.id !== newTx.id), newTx];
     setTransactions(updatedTx);
     saveStoredTransactions(updatedTx);
-    syncSingleTransactionToSupabase(newTx);
 
     // 3. Sync Citizen's paidMonths array and statusIuran
     const match = warga.find(w => 
@@ -666,15 +767,39 @@ export default function App() {
       (w.username && targetSub.wargaName && w.username.toLowerCase().trim() === targetSub.wargaName.toLowerCase().trim()) ||
       (targetSub.submittedBy && w.username && w.username.toLowerCase().trim() === targetSub.submittedBy.toLowerCase().trim())
     );
+    let updatedW: Warga | null = null;
     if (match) {
       const existingMonths = match.paidMonths || [];
       const mergedMonths = Array.from(new Set([...existingMonths, ...targetSub.paidMonths]));
-      const updatedW = { ...match, paidMonths: mergedMonths, statusIuran: 'Lunas' as const };
+      updatedW = { ...match, paidMonths: mergedMonths, statusIuran: 'Lunas' as const };
       handleUpdateWarga(updatedW);
+    }
+
+    notifyBroadcast();
+
+    // 4. Push to Supabase Cloud & check sync result
+    if (approvedSub) {
+      const subRes = await syncSingleSubmissionToSupabase(approvedSub);
+      await syncSingleTransactionToSupabase(newTx);
+      if (updatedW) {
+        await syncSingleWargaToSupabase(updatedW);
+      }
+
+      if (!subRes.success) {
+        setActiveToasts(prev => [
+          ...prev,
+          {
+            id: `toast-appr-err-${Date.now()}`,
+            title: 'Peringatan Sync Cloud',
+            message: `Approval berhasil disimpan di perangkat ini, tetapi gagal sync ke Cloud Supabase (${subRes.error || 'Offline'}). Mohon periksa koneksi Supabase agar sync ke device lain.`,
+            type: 'info'
+          }
+        ]);
+      }
     }
   };
 
-  const handleRejectSubmission = (subId: string, reason: string, reviewerName: string) => {
+  const handleRejectSubmission = async (subId: string, reason: string, reviewerName: string) => {
     const updatedSubmissions = submissions.map(s => {
       if (s.id === subId) {
         return {
@@ -691,8 +816,21 @@ export default function App() {
     saveStoredSubmissions(updatedSubmissions);
 
     const rejectedSub = updatedSubmissions.find(s => s.id === subId);
+    notifyBroadcast();
+
     if (rejectedSub) {
-      syncSingleSubmissionToSupabase(rejectedSub);
+      const subRes = await syncSingleSubmissionToSupabase(rejectedSub);
+      if (!subRes.success) {
+        setActiveToasts(prev => [
+          ...prev,
+          {
+            id: `toast-rej-err-${Date.now()}`,
+            title: 'Peringatan Sync Cloud',
+            message: `Penolakan disimpan di perangkat ini, namun Supabase Cloud offline (${subRes.error || 'Gagal Sync'}).`,
+            type: 'info'
+          }
+        ]);
+      }
     }
   };
 
@@ -779,6 +917,8 @@ export default function App() {
             transactions={transactions}
             submissions={submissions}
             onAddSubmission={handleAddSubmission}
+            onRefreshSync={runSync}
+            dbStatus={dbStatus}
           />
         );
       case 'profile':

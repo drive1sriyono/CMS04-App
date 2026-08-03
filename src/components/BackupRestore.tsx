@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { User, Warga, FinancialTransaction, DatabaseStatus } from '../types';
 import { resetToDefault } from '../data/initialData';
-import { testSupabaseRealConnection, pushAllLocalDataToSupabase } from '../utils/supabase';
+import { testSupabaseRealConnection, pushAllLocalDataToSupabase, getSupabaseConfig, saveSupabaseCredentials } from '../utils/supabase';
 
 interface BackupRestoreProps {
   currentUser: User;
@@ -45,12 +45,21 @@ export default function BackupRestore({
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Get Supabase credentials automatically from Vercel / Vite Environment Variables
-  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
-  const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+  // Get Supabase credentials
+  const currentConfig = getSupabaseConfig();
+  const [inputUrl, setInputUrl] = useState(currentConfig.url);
+  const [inputKey, setInputKey] = useState(currentConfig.key);
+  const [showKeyInput, setShowKeyInput] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSaveCredentials = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveSupabaseCredentials(inputUrl, inputKey);
+    setSuccessMsg('Kredensial Supabase berhasil disimpan! Silakan klik "Tes Koneksi" untuk menguji.');
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
 
   // Guard: ONLY Admin has access to this menu
   if (currentUser.role !== 'admin') {
@@ -339,9 +348,48 @@ export default function BackupRestore({
               <h3 className="text-xs font-bold uppercase tracking-wider text-white">Konfigurasi & Tes Koneksi Real Supabase</h3>
             </div>
 
-            <p className="text-xs text-slate-400 leading-relaxed mb-5">
-              Kredensial database Supabase terhubung secara otomatis via <strong>Vercel Environment Variables</strong> (<code>VITE_SUPABASE_URL</code> &amp; <code>VITE_SUPABASE_ANON_KEY</code>). Pengguna tidak perlu menginputkan API Key/URL secara manual di aplikasi.
+            <p className="text-xs text-slate-400 leading-relaxed mb-4">
+              Kredensial database Supabase dapat dikonfigurasi via <code>.env</code> atau langsung di bawah ini agar tersimpan di browser untuk sinkronisasi antar perangkat.
             </p>
+
+            <button
+              type="button"
+              onClick={() => setShowKeyInput(!showKeyInput)}
+              className="text-xs text-amber-400 hover:text-amber-300 font-bold mb-4 flex items-center gap-1 cursor-pointer underline"
+            >
+              {showKeyInput ? 'Sembunyikan Pengaturan Supabase Key' : 'Atur Supabase URL & Anon Key Manual'}
+            </button>
+
+            {showKeyInput && (
+              <form onSubmit={handleSaveCredentials} className="mb-5 p-4 bg-slate-950 border border-amber-500/30 rounded-2xl space-y-3">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Supabase Project URL</label>
+                  <input
+                    type="text"
+                    value={inputUrl}
+                    onChange={(e) => setInputUrl(e.target.value)}
+                    placeholder="https://xyz.supabase.co"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Supabase Anon Key</label>
+                  <input
+                    type="password"
+                    value={inputKey}
+                    onChange={(e) => setInputKey(e.target.value)}
+                    placeholder="eyJhY3R... (Paste Anon Key)"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                >
+                  Simpan Kredensial Database
+                </button>
+              </form>
+            )}
 
             {/* Current Status Badge Widget */}
             <div className="space-y-4">

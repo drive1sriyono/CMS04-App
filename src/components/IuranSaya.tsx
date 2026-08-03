@@ -14,9 +14,10 @@ import {
   ShieldCheck,
   XCircle
 } from 'lucide-react';
-import { User, Warga, FinancialTransaction, PaymentSubmission } from '../types';
+import { User, Warga, FinancialTransaction, PaymentSubmission, DatabaseStatus } from '../types';
 import { formatCurrency, formatDate } from '../data/initialData';
 import { compressImageFile } from '../utils/imageCompressor';
+import { RefreshCw } from 'lucide-react';
 
 interface IuranSayaProps {
   currentUser: User;
@@ -24,6 +25,8 @@ interface IuranSayaProps {
   transactions: FinancialTransaction[];
   submissions: PaymentSubmission[];
   onAddSubmission: (newSub: PaymentSubmission) => void;
+  onRefreshSync?: () => Promise<any>;
+  dbStatus?: DatabaseStatus;
 }
 
 const MONTH_LIST = [
@@ -37,7 +40,9 @@ export default function IuranSaya({
   warga = [],
   transactions = [],
   submissions = [],
-  onAddSubmission
+  onAddSubmission,
+  onRefreshSync,
+  dbStatus
 }: IuranSayaProps) {
   const uName = currentUser.fullName.toLowerCase().trim();
   const uUser = currentUser.username.toLowerCase().trim();
@@ -282,14 +287,43 @@ export default function IuranSaya({
   return (
     <div className="space-y-8 animate-fadeIn text-slate-100">
       {/* Header */}
-      <div className="border-b border-slate-800 pb-5">
-        <h2 className="text-xl md:text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
-          <CreditCard className="text-amber-400" size={26} />
-          Catatan & Pembayaran Iuran Saya
-        </h2>
-        <p className="text-xs text-slate-400 mt-1">
-          Pantau status iuran bulanan Anda, ajukan bukti transfer pembayaran secara mandiri, dan kelola histori transaksi.
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+        <div>
+          <h2 className="text-xl md:text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
+            <CreditCard className="text-amber-400" size={26} />
+            Catatan & Pembayaran Iuran Saya
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Pantau status iuran bulanan Anda, ajukan bukti transfer pembayaran secara mandiri, dan kelola histori transaksi.
+          </p>
+        </div>
+
+        {onRefreshSync && (
+          <button
+            type="button"
+            onClick={async () => {
+              const btnIcon = document.getElementById('iuran-sync-icon');
+              if (btnIcon) btnIcon.classList.add('animate-spin');
+              try {
+                await onRefreshSync();
+              } catch (e) {
+                console.error('Manual sync failed:', e);
+              } finally {
+                setTimeout(() => {
+                  if (btnIcon) btnIcon.classList.remove('animate-spin');
+                }, 1000);
+              }
+            }}
+            title="Sinkronkan status pengajuan iuran sekarang dari Supabase Cloud"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-850 text-amber-400 border border-amber-500/30 font-bold rounded-xl text-xs transition-all shadow-lg shrink-0 cursor-pointer self-start md:self-auto"
+          >
+            <RefreshCw id="iuran-sync-icon" size={14} />
+            <span>Refresh & Sync</span>
+            {dbStatus && (
+              <span className={`w-1.5 h-1.5 rounded-full ${dbStatus.connected ? 'bg-amber-400 animate-pulse' : 'bg-slate-500'}`} title={dbStatus.lastTested}></span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* SECTION c: Kartu Iuran Warga Terdaftar (Minimizable Banner) */}
