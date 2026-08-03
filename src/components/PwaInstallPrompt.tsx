@@ -36,6 +36,11 @@ export const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({ variant = 'b
     const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
     setIsIos(isIosDevice);
 
+    // Initial check for globally captured prompt
+    if ((window as any).deferredPrompt) {
+      setDeferredPrompt((window as any).deferredPrompt);
+    }
+
     // Listen for PWA beforeinstallprompt event
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -46,6 +51,7 @@ export const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({ variant = 'b
     const handleAppInstalled = () => {
       setIsInstalled(true);
       setDeferredPrompt(null);
+      (window as any).deferredPrompt = null;
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -63,18 +69,21 @@ export const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({ variant = 'b
       return;
     }
 
-    if (!deferredPrompt) {
+    const activePrompt = deferredPrompt || (window as any).deferredPrompt;
+
+    if (!activePrompt) {
       // If browser doesn't trigger automated prompt (e.g. desktop safari/firefox), explain how to install
       alert('Untuk menginstal CMS04:\n- Di Chrome/Edge Laptop: Klik ikon Instal di sebelah kanan address bar browser.\n- Di Android: Ketuk menu titik tiga (⋮) lalu pilih "Tambahkan ke Layar Utama".');
       return;
     }
 
-    deferredPrompt.prompt();
-    const choiceResult = await deferredPrompt.userChoice;
+    activePrompt.prompt();
+    const choiceResult = await activePrompt.userChoice;
     if (choiceResult.outcome === 'accepted') {
       setIsInstalled(true);
     }
     setDeferredPrompt(null);
+    (window as any).deferredPrompt = null;
   };
 
   // If already standalone mode, render a clean badge or hide
