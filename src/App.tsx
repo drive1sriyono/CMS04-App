@@ -179,18 +179,35 @@ export default function App() {
 
         if (res.submissions) {
           setSubmissions(prevSubmissions => {
-            const fetchedIds = new Set(res.submissions!.map(s => s.id));
-            const pendingLocal = prevSubmissions.filter(s => s.status === 'Pending' && !fetchedIds.has(s.id));
-            
-            // Auto retry syncing local-only pending submissions to Supabase!
-            if (pendingLocal.length > 0) {
-              console.log(`Auto-syncing ${pendingLocal.length} local-only pending submissions to Supabase...`);
-              pendingLocal.forEach(sub => {
-                syncSingleSubmissionToSupabase(sub);
-              });
-            }
+            const fetchedMap = new Map(res.submissions!.map(s => [s.id, s]));
+            const localOnlyOrUpdated: PaymentSubmission[] = [];
 
-            const merged = [...pendingLocal, ...res.submissions!];
+            prevSubmissions.forEach(localSub => {
+              const fetchedSub = fetchedMap.get(localSub.id);
+              if (!fetchedSub) {
+                // Local submission not yet on Cloud -> push to Cloud!
+                localOnlyOrUpdated.push(localSub);
+                syncSingleSubmissionToSupabase(localSub);
+              } else if (localSub.status !== 'Pending' && fetchedSub.status === 'Pending') {
+                // Local has been Approved/Rejected, but Cloud is still Pending -> push update to Cloud!
+                localOnlyOrUpdated.push(localSub);
+                syncSingleSubmissionToSupabase(localSub);
+              }
+            });
+
+            // Combine remote submissions, preferring local status if local has approved/rejected it
+            const mergedMap = new Map<string, PaymentSubmission>();
+            res.submissions!.forEach(s => mergedMap.set(s.id, s));
+            prevSubmissions.forEach(localSub => {
+              const remote = mergedMap.get(localSub.id);
+              if (!remote) {
+                mergedMap.set(localSub.id, localSub);
+              } else if (localSub.status !== 'Pending' && remote.status === 'Pending') {
+                mergedMap.set(localSub.id, localSub);
+              }
+            });
+
+            const merged = Array.from(mergedMap.values());
             saveStoredSubmissions(merged);
 
             // Reconcile Warga and Transactions with any Approved submissions received from Cloud
