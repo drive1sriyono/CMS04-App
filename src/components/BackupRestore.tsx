@@ -10,7 +10,7 @@ import {
   FileJson,
   CloudUpload
 } from 'lucide-react';
-import { User, Warga, FinancialTransaction, PaymentSubmission, DatabaseStatus } from '../types';
+import { User, Warga, FinancialTransaction, DatabaseStatus } from '../types';
 import { resetToDefault } from '../data/initialData';
 import { testSupabaseRealConnection, pushAllLocalDataToSupabase } from '../utils/supabase';
 
@@ -19,7 +19,6 @@ interface BackupRestoreProps {
   users: User[];
   warga: Warga[];
   transactions: FinancialTransaction[];
-  submissions?: PaymentSubmission[];
   dbStatus: DatabaseStatus;
   onRestoreState: (state: {
     users: User[];
@@ -35,7 +34,6 @@ export default function BackupRestore({
   users,
   warga,
   transactions,
-  submissions = [],
   dbStatus,
   onRestoreState,
   onUpdateDbStatus
@@ -196,7 +194,7 @@ export default function BackupRestore({
       users,
       warga,
       transactions,
-      submissions
+      submissions: []
     });
 
     setSyncingCloud(false);
@@ -468,7 +466,6 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS family TEXT DEFAULT '[]';
 CREATE TABLE IF NOT EXISTS public.financial_transactions (
   id TEXT PRIMARY KEY,
   type TEXT NOT NULL,
-  category TEXT DEFAULT 'Iuran Warga',
   warga_name TEXT,
   recipient TEXT,
   amount NUMERIC NOT NULL,
@@ -479,7 +476,6 @@ CREATE TABLE IF NOT EXISTS public.financial_transactions (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-ALTER TABLE public.financial_transactions ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Iuran Warga';
 ALTER TABLE public.financial_transactions ADD COLUMN IF NOT EXISTS warga_name TEXT;
 ALTER TABLE public.financial_transactions ADD COLUMN IF NOT EXISTS recipient TEXT;
 ALTER TABLE public.financial_transactions ADD COLUMN IF NOT EXISTS paid_months TEXT DEFAULT '[]';

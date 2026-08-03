@@ -41,8 +41,6 @@ import {
   deleteUserFromSupabase,
   syncSingleWargaToSupabase,
   deleteWargaFromSupabase,
-  syncSingleTransactionToSupabase,
-  syncSingleSubmissionToSupabase,
   getSupabaseClient
 } from './utils/supabase';
 
@@ -351,7 +349,6 @@ export default function App() {
     const updatedTx = [...transactions, newTx];
     setTransactions(updatedTx);
     saveStoredTransactions(updatedTx);
-    syncSingleTransactionToSupabase(newTx);
 
     // Dynamic auto-action: If it is a Pemasukan related to a citizen payment,
     // let's set their citizen iuran status to 'Lunas'!
@@ -377,7 +374,6 @@ export default function App() {
     const updated = [newSub, ...submissions];
     setSubmissions(updated);
     saveStoredSubmissions(updated);
-    syncSingleSubmissionToSupabase(newSub);
   };
 
   const handleApproveSubmission = (subId: string, reviewerName: string) => {
@@ -385,30 +381,24 @@ export default function App() {
     if (!targetSub) return;
 
     // 1. Update submission status
-    let approvedSub: PaymentSubmission | null = null;
     const updatedSubmissions = submissions.map(s => {
       if (s.id === subId) {
-        approvedSub = {
+        return {
           ...s,
           status: 'Approved' as const,
           reviewedBy: reviewerName,
           reviewedAt: new Date().toISOString()
         };
-        return approvedSub;
       }
       return s;
     });
     setSubmissions(updatedSubmissions);
     saveStoredSubmissions(updatedSubmissions);
-    if (approvedSub) {
-      syncSingleSubmissionToSupabase(approvedSub);
-    }
 
     // 2. Convert submission to official FinancialTransaction
     const newTx: FinancialTransaction = {
       id: `tx-approved-${Date.now()}`,
       type: 'Pemasukan',
-      category: 'Iuran Warga',
       amount: targetSub.amount,
       date: targetSub.date,
       description: `Iuran Bulanan RT (Verifikasi Online) - ${targetSub.paidMonths.join(', ')}`,
@@ -421,7 +411,6 @@ export default function App() {
     const updatedTx = [...transactions, newTx];
     setTransactions(updatedTx);
     saveStoredTransactions(updatedTx);
-    syncSingleTransactionToSupabase(newTx);
 
     // 3. Sync Citizen's paidMonths array and statusIuran
     const match = warga.find(w => 
@@ -439,25 +428,20 @@ export default function App() {
   };
 
   const handleRejectSubmission = (subId: string, reason: string, reviewerName: string) => {
-    let rejectedSub: PaymentSubmission | null = null;
     const updatedSubmissions = submissions.map(s => {
       if (s.id === subId) {
-        rejectedSub = {
+        return {
           ...s,
           status: 'Rejected' as const,
           rejectionReason: reason,
           reviewedBy: reviewerName,
           reviewedAt: new Date().toISOString()
         };
-        return rejectedSub;
       }
       return s;
     });
     setSubmissions(updatedSubmissions);
     saveStoredSubmissions(updatedSubmissions);
-    if (rejectedSub) {
-      syncSingleSubmissionToSupabase(rejectedSub);
-    }
   };
 
   // Backup state restore
@@ -595,7 +579,6 @@ export default function App() {
             users={users} 
             warga={warga} 
             transactions={transactions} 
-            submissions={submissions}
             dbStatus={dbStatus} 
             onRestoreState={handleRestoreState} 
             onUpdateDbStatus={handleUpdateDbStatus} 

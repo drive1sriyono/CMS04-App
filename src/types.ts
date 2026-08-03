@@ -35,7 +35,6 @@ export interface Warga {
 export interface FinancialTransaction {
   id: string;
   type: 'Pemasukan' | 'Pengeluaran';
-  category?: string;
   // If Pemasukan
   wargaId?: string; // Reference to citizen ID / User ID
   wargaName?: string; // Reference to citizen full name

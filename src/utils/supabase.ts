@@ -92,49 +92,48 @@ export const mapSupabaseToWarga = (row: any): Warga => ({
   paidMonths: typeof row.paid_months === 'string' ? JSON.parse(row.paid_months) : (row.paid_months || [])
 });
 
-export const sanitizeTransactionType = (rawType: any): 'Pemasukan' | 'Pengeluaran' => {
-  if (!rawType) return 'Pemasukan';
-  const str = String(rawType).trim().toLowerCase();
-  if (str === 'pengeluaran' || str === 'expense' || str === 'keluar' || str === 'out') {
-    return 'Pengeluaran';
-  }
-  return 'Pemasukan';
-};
-
 // Map JS FinancialTransaction to SQL
 export const mapTransactionToSupabase = (tx: FinancialTransaction) => {
-  const type = sanitizeTransactionType(tx.type);
+  const isPemasukan = tx.type === 'Pemasukan';
+  const category = isPemasukan ? 'iuran' : 'lainnya';
+
   return {
-    id: tx.id || `tx-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-    type: type,
-    category: tx.category || (type === 'Pemasukan' ? 'Iuran Warga' : 'Pengeluaran/Operasional'),
+    id: tx.id,
+    type: tx.type,
     warga_name: tx.wargaName || null,
     recipient: tx.recipient || null,
-    amount: Number(tx.amount) || 0,
-    date: tx.date || new Date().toISOString().split('T')[0],
+    amount: tx.amount,
+    date: tx.date,
     description: tx.description || '',
     proof_image: tx.proofImage || null,
-    paid_months: tx.paidMonths ? JSON.stringify(tx.paidMonths) : '[]'
+    paid_months: tx.paidMonths ? JSON.stringify(tx.paidMonths) : '[]',
+    category: category
   };
 };
 
 export const mapSupabaseToTransaction = (row: any): FinancialTransaction => {
-  const rawType = String(row.type || '').toLowerCase();
-  const type: 'Pemasukan' | 'Pengeluaran' = 
-    (rawType === 'pengeluaran' || rawType === 'expense' || rawType === 'keluar' || rawType === 'out')
-      ? 'Pengeluaran'
-      : 'Pemasukan';
+  const rawType = String(row.type || 'Pemasukan').toLowerCase().trim();
+  let mappedType: 'Pemasukan' | 'Pengeluaran' = 'Pemasukan';
+  
+  if (
+    rawType.startsWith('peng') || 
+    rawType.startsWith('exp') || 
+    rawType.startsWith('out') || 
+    rawType.startsWith('with') || 
+    rawType === 'keluar'
+  ) {
+    mappedType = 'Pengeluaran';
+  }
 
   return {
-    id: String(row.id),
-    type: type,
-    category: row.category || (type === 'Pemasukan' ? 'Iuran Warga' : 'Pengeluaran/Operasional'),
-    wargaName: row.warga_name || row.wargaName || undefined,
-    recipient: row.recipient || undefined,
-    amount: Number(row.amount) || 0,
-    date: row.date || new Date().toISOString().split('T')[0],
+    id: row.id,
+    type: mappedType,
+    wargaName: row.warga_name || row.wargaName,
+    recipient: row.recipient,
+    amount: Number(row.amount),
+    date: row.date,
     description: row.description || '',
-    proofImage: row.proof_image || row.proofImage || undefined,
+    proofImage: row.proof_image || row.proofImage,
     paidMonths: typeof row.paid_months === 'string' ? JSON.parse(row.paid_months) : (row.paid_months || [])
   };
 };
@@ -225,7 +224,7 @@ export const testSupabaseRealConnection = async (): Promise<{ success: boolean; 
   }
 };
 
-// Helper to perform upsert with automatic column pruning and constraint resolution
+// Helper to perform upsert with automatic column pruning if schema is missing optional columns
 export const safeUpsert = async (
   client: SupabaseClient,
   tableName: string,
@@ -241,11 +240,46 @@ export const safeUpsert = async (
   let currentRows = rows.map(r => ({ ...r }));
   let attempts = 0;
 
+  const isCheckConstraintError = (err: any) => {
+    if (!err) return false;
+    const errMsg = (err.message || '').toLowerCase();
+    return err.code === '23514' || errMsg.includes('violates check constraint') || errMsg.includes('check constraint');
+  };
+
+  // If we hit a check constraint error initially on financial_transactions (like financial_transactions_type_check)
+  if (tableName === 'financial_transactions' && isCheckConstraintError(error)) {
+    const alternatives = [
+      { type: { 'Pemasukan': 'income', 'Pengeluaran': 'expense' }, category: { 'iuran': 'income', 'lainnya': 'expense' } },
+      { type: { 'Pemasukan': 'pemasukan', 'Pengeluaran': 'pengeluaran' }, category: { 'iuran': 'pemasukan', 'lainnya': 'pengeluaran' } },
+      { type: { 'Pemasukan': 'INCOME', 'Pengeluaran': 'EXPENSE' }, category: { 'iuran': 'INCOME', 'lainnya': 'EXPENSE' } },
+      { type: { 'Pemasukan': 'income', 'Pengeluaran': 'outcome' }, category: { 'iuran': 'income', 'lainnya': 'outcome' } },
+      { type: { 'Pemasukan': 'deposit', 'Pengeluaran': 'withdrawal' }, category: { 'iuran': 'deposit', 'lainnya': 'withdrawal' } },
+    ];
+
+    for (const alt of alternatives) {
+      const mappedRows = currentRows.map(row => {
+        const copy = { ...row };
+        if (copy.type) {
+          copy.type = (alt.type as any)[copy.type] || copy.type;
+        }
+        if (copy.category) {
+          copy.category = (alt.category as any)[copy.category] || copy.category;
+        }
+        return copy;
+      });
+
+      const retryRes = await client.from(tableName).upsert(mappedRows, { onConflict: 'id' });
+      if (!retryRes.error) {
+        return null; // success!
+      }
+      error = retryRes.error;
+    }
+  }
+
+  // Column pruning retry loop
   while (error && attempts < 10) {
     attempts++;
     const errMsg = error.message || '';
-
-    // 1. Missing column handling (e.g. "Could not find the 'birth_date' column...")
     const match = errMsg.match(/Could not find the '([^']+)' column/i);
     if (match && match[1]) {
       const missingCol = match[1];
@@ -257,38 +291,39 @@ export const safeUpsert = async (
       });
       const retryRes = await client.from(tableName).upsert(currentRows, { onConflict: 'id' });
       error = retryRes.error;
-      continue;
-    }
 
-    // 2. Handling check constraint on financial_transactions type (e.g. "financial_transactions_type_check")
-    if (tableName === 'financial_transactions' && (errMsg.includes('type_check') || errMsg.includes('check constraint') || errMsg.includes('violates check constraint'))) {
-      if (attempts === 1) {
-        console.warn(`Check constraint on 'type' failed. Retrying with lowercase ('pemasukan'/'pengeluaran')...`);
-        currentRows = currentRows.map(r => ({
-          ...r,
-          type: r.type === 'Pengeluaran' ? 'pengeluaran' : 'pemasukan'
-        }));
-      } else if (attempts === 2) {
-        console.warn(`Check constraint on 'type' failed. Retrying with English ('income'/'expense')...`);
-        currentRows = currentRows.map(r => ({
-          ...r,
-          type: (r.type === 'pengeluaran' || r.type === 'Pengeluaran') ? 'expense' : 'income'
-        }));
-      } else if (attempts === 3) {
-        console.warn(`Check constraint on 'type' failed. Retrying with uppercase ('PEMASUKAN'/'PENGELUARAN')...`);
-        currentRows = currentRows.map(r => ({
-          ...r,
-          type: (r.type === 'expense' || r.type === 'pengeluaran' || r.type === 'Pengeluaran') ? 'PENGELUARAN' : 'PEMASUKAN'
-        }));
-      } else {
-        break;
+      // If we now get a check constraint error after pruning, try constraint mappings
+      if (tableName === 'financial_transactions' && isCheckConstraintError(error)) {
+        const alternatives = [
+          { type: { 'Pemasukan': 'income', 'Pengeluaran': 'expense' }, category: { 'iuran': 'income', 'lainnya': 'expense' } },
+          { type: { 'Pemasukan': 'pemasukan', 'Pengeluaran': 'pengeluaran' }, category: { 'iuran': 'pemasukan', 'lainnya': 'pengeluaran' } },
+          { type: { 'Pemasukan': 'INCOME', 'Pengeluaran': 'EXPENSE' }, category: { 'iuran': 'INCOME', 'lainnya': 'EXPENSE' } },
+          { type: { 'Pemasukan': 'income', 'Pengeluaran': 'outcome' }, category: { 'iuran': 'income', 'lainnya': 'outcome' } },
+          { type: { 'Pemasukan': 'deposit', 'Pengeluaran': 'withdrawal' }, category: { 'iuran': 'deposit', 'lainnya': 'withdrawal' } },
+        ];
+
+        for (const alt of alternatives) {
+          const mappedRows = currentRows.map(row => {
+            const copy = { ...row };
+            if (copy.type) {
+              copy.type = (alt.type as any)[copy.type] || copy.type;
+            }
+            if (copy.category) {
+              copy.category = (alt.category as any)[copy.category] || copy.category;
+            }
+            return copy;
+          });
+
+          const constraintRetryRes = await client.from(tableName).upsert(mappedRows, { onConflict: 'id' });
+          if (!constraintRetryRes.error) {
+            return null; // success!
+          }
+          error = constraintRetryRes.error;
+        }
       }
-      const retryRes = await client.from(tableName).upsert(currentRows, { onConflict: 'id' });
-      error = retryRes.error;
-      continue;
+    } else {
+      break;
     }
-
-    break;
   }
 
   return error;
@@ -417,45 +452,5 @@ export const deleteWargaFromSupabase = async (wargaId: string) => {
     await client.from('warga').delete().eq('id', wargaId);
   } catch (e) {
     console.error('Error deleting warga from Supabase:', e);
-  }
-};
-
-export const syncSingleTransactionToSupabase = async (tx: FinancialTransaction) => {
-  const client = getSupabaseClient();
-  if (!client) return;
-  try {
-    await safeUpsert(client, 'financial_transactions', [mapTransactionToSupabase(tx)]);
-  } catch (e) {
-    console.error('Error syncing transaction to Supabase:', e);
-  }
-};
-
-export const deleteTransactionFromSupabase = async (txId: string) => {
-  const client = getSupabaseClient();
-  if (!client) return;
-  try {
-    await client.from('financial_transactions').delete().eq('id', txId);
-  } catch (e) {
-    console.error('Error deleting transaction from Supabase:', e);
-  }
-};
-
-export const syncSingleSubmissionToSupabase = async (sub: PaymentSubmission) => {
-  const client = getSupabaseClient();
-  if (!client) return;
-  try {
-    await safeUpsert(client, 'payment_submissions', [mapSubmissionToSupabase(sub)]);
-  } catch (e) {
-    console.error('Error syncing payment submission to Supabase:', e);
-  }
-};
-
-export const deleteSubmissionFromSupabase = async (subId: string) => {
-  const client = getSupabaseClient();
-  if (!client) return;
-  try {
-    await client.from('payment_submissions').delete().eq('id', subId);
-  } catch (e) {
-    console.error('Error deleting payment submission from Supabase:', e);
   }
 };
