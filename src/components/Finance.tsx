@@ -908,304 +908,7 @@ export default function Finance({
         </div>
       )}
 
-      {/* RULE 1: ONLINE SUBMISSION FORM & HISTORY (Semua Akun / Every Account) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Form Submit Iuran Warga */}
-        <div className="lg:col-span-1 bg-gradient-to-br from-slate-900 via-amber-950/20 to-slate-900 border border-amber-500/40 rounded-3xl p-6 shadow-2xl h-fit">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3.5 mb-5">
-              <div className="flex items-center gap-2">
-                <Upload size={20} className="text-amber-400" />
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">Form Pengajuan Bayar Iuran</h3>
-                  <p className="text-[10px] text-slate-400">Kirim bukti pembayaran iuran Anda ke RT/Bendahara</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsWargaFormOpen(!isWargaFormOpen)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-900 text-amber-300 hover:text-amber-400 border-2 border-amber-500/80 text-[11px] font-bold shadow-md shadow-amber-500/10 transition-all cursor-pointer shrink-0"
-              >
-                {isWargaFormOpen ? (
-                  <>
-                    <ChevronUp size={14} className="text-amber-400" />
-                    <span>Minimize</span>
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown size={14} className="text-amber-400" />
-                    <span>Buka Form</span>
-                  </>
-                )}
-              </button>
-            </div>
 
-            {isWargaFormOpen && (
-              <form onSubmit={handleWargaSubmit} className="space-y-4 text-xs">
-              
-              {/* Nama & Blok User (Readonly) */}
-              <div className="bg-slate-950/80 p-3 rounded-2xl border border-slate-800 space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest block">Identitas Penyetor</span>
-                <div className="text-xs font-bold text-white flex items-center justify-between gap-2">
-                  <span className="truncate">{currentUser.fullName}</span>
-                  <span className="text-amber-300 font-mono font-bold bg-slate-900 border border-slate-800 px-2.5 py-0.5 rounded-full text-[10px] shrink-0 whitespace-nowrap">
-                    Blok {currentUser.blok}
-                  </span>
-                </div>
-              </div>
-
-              {/* Tanggal Pembayaran */}
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                  <Calendar size={12} className="text-amber-400" />
-                  Tanggal Transfer / Bayar
-                </label>
-                <input
-                  type="date"
-                  value={wargaSubDate}
-                  onChange={(e) => setWargaSubDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 transition-all font-medium"
-                />
-              </div>
-
-              {/* Pilihan Bulan Pembayaran */}
-              <div className="p-3.5 bg-slate-950 border border-amber-500/20 rounded-2xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                    <Calendar size={14} />
-                    Pilih Bulan Iuran 2026
-                  </label>
-                  <span className="text-[10px] text-amber-300/80 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full font-semibold">
-                    Harus Berurutan
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-1.5 max-h-44 overflow-y-auto pr-1">
-                  {MONTH_LIST.map((m) => {
-                    const isAlreadyPaid = currentUserPaidMonths.includes(m);
-                    const isPending = currentUserPendingMonths.includes(m);
-                    const isSelected = wargaSubMonths.includes(m);
-                    const shortName = m.replace(' 2026', '');
-
-                    if (isAlreadyPaid) {
-                      return (
-                        <div
-                          key={m}
-                          className="px-2 py-1.5 rounded-lg text-[9px] font-bold border bg-emerald-950/60 border-emerald-500/40 text-emerald-400 text-center flex flex-col items-center justify-center cursor-not-allowed opacity-80"
-                          title="Sudah Lunas"
-                        >
-                          <span className="font-bold">{shortName}</span>
-                          <span className="text-[8px] uppercase tracking-tighter">✓ Lunas</span>
-                        </div>
-                      );
-                    }
-
-                    if (isPending) {
-                      return (
-                        <div
-                          key={m}
-                          className="px-2 py-1.5 rounded-lg text-[9px] font-bold border bg-amber-950/60 border-amber-500/40 text-amber-300 text-center flex flex-col items-center justify-center cursor-not-allowed opacity-80"
-                          title="Menunggu Verifikasi RT/Bendahara"
-                        >
-                          <span className="font-bold">{shortName}</span>
-                          <span className="text-[8px] uppercase tracking-tighter text-amber-400">Verifikasi</span>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => handleWargaToggleMonth(m)}
-                        className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border transition-all text-center flex items-center justify-center gap-1 cursor-pointer ${
-                          isSelected 
-                            ? 'bg-amber-500 text-slate-950 border-amber-400 font-black' 
-                            : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-amber-500/40'
-                        }`}
-                      >
-                        {isSelected && <Check size={10} />}
-                        <span>{shortName}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {wargaSubMonths.length > 0 && (
-                  <div className="text-[11px] text-amber-300 font-bold pt-1">
-                    {wargaSubMonths.length} Bulan Dipilih: <span className="font-normal text-slate-300">{wargaSubMonths.join(', ')}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Nominal Total */}
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Nominal Pembayaran (Rp)</label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-xs font-bold text-amber-400">Rp</span>
-                  <input
-                    type="number"
-                    value={wargaSubAmount}
-                    onChange={(e) => setWargaSubAmount(e.target.value)}
-                    placeholder="60000"
-                    className="w-full pl-10 pr-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-amber-300 focus:outline-none focus:border-amber-500 font-mono font-bold"
-                  />
-                </div>
-              </div>
-
-              {/* Foto Bukti Pembayaran */}
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center justify-between">
-                  <span>Foto Bukti Transfer (Wajib)</span>
-                  <span className="text-[9px] text-amber-400 font-mono font-normal">Kompresi HTML5 Canvas</span>
-                </label>
-                <div className="flex items-center justify-center w-full">
-                  <label className="flex flex-col items-center justify-center w-full h-28 border border-amber-500/30 border-dashed rounded-xl cursor-pointer bg-slate-950 hover:bg-slate-800/50 transition-all">
-                    <div className="flex flex-col items-center justify-center pt-3 pb-3">
-                      {isCompressingWarga ? (
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
-                          <span className="text-[10px] text-amber-300 font-bold">Mengompresi Gambar...</span>
-                        </div>
-                      ) : wargaSubProof ? (
-                        <div className="relative group w-full h-24 px-2 flex justify-center items-center">
-                          <img src={wargaSubProof} alt="Preview Bukti Transfer" className="h-full max-w-full object-cover rounded-lg border border-slate-700" />
-                          <button
-                            type="button"
-                            onClick={(e) => { e.preventDefault(); setWargaSubProof(''); if (wargaFileInputRef.current) wargaFileInputRef.current.value=''; }}
-                            className="absolute -top-1 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full p-0.5 cursor-pointer"
-                          >
-                            <X size={10} />
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <Upload size={18} className="text-amber-400 mb-1" />
-                          <p className="text-[10px] text-slate-300"><span className="font-bold text-amber-400">Upload Struk Transfer</span></p>
-                          <p className="text-[8px] text-slate-500">Terkompresi otomatis & jernih</p>
-                        </>
-                      )}
-                    </div>
-                    <input
-                      type="file"
-                      ref={wargaFileInputRef}
-                      onChange={handleWargaProofChange}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full mt-2 py-3 gold-gradient-bg text-slate-950 font-black rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 cursor-pointer"
-              >
-                <CheckCircle2 size={16} />
-                Kirim Pengajuan Pembayaran
-              </button>
-
-            </form>
-            )}
-          </div>
-
-          {/* Riwayat Pengajuan Saya (Semua Akun / Every Account) */}
-          <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3.5">
-              <div className="flex items-center gap-2 min-w-0">
-                <Clock size={16} className={hasPendingMySubmissions ? "text-red-400 animate-pulse shrink-0" : "text-amber-400 shrink-0"} />
-                <h3 className="text-sm font-bold uppercase tracking-wider text-white flex flex-wrap items-center gap-2">
-                  <span>Riwayat Pengajuan Pembayaran Saya ({mySubmissions.length})</span>
-                  {hasPendingMySubmissions && (
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-red-950/90 text-red-400 border border-red-500/60 uppercase tracking-wider animate-pulse">
-                      Pending Verifikasi
-                    </span>
-                  )}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsMySubmissionsOpen(!isMySubmissionsOpen)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold shadow-md transition-all cursor-pointer shrink-0 ${
-                  hasPendingMySubmissions
-                    ? 'bg-red-950/90 hover:bg-red-900 text-red-300 hover:text-red-200 border-2 border-red-500/90 shadow-red-500/30 animate-pulse'
-                    : 'bg-slate-950 hover:bg-slate-900 text-amber-300 hover:text-amber-400 border-2 border-amber-500/80 shadow-amber-500/10'
-                }`}
-              >
-                {isMySubmissionsOpen ? (
-                  <>
-                    <ChevronUp size={14} className={hasPendingMySubmissions ? 'text-red-400' : 'text-amber-400'} />
-                    <span>Minimize</span>
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown size={14} className={hasPendingMySubmissions ? 'text-red-400' : 'text-amber-400'} />
-                    <span>Buka Riwayat ({mySubmissions.length})</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {isMySubmissionsOpen && (
-              <>
-                {mySubmissions.length > 0 ? (
-                  <div className="space-y-3">
-                    {mySubmissions.map((sub) => {
-                      const isPending = sub.status === 'Pending';
-                      const isApproved = sub.status === 'Approved';
-                      const isRejected = sub.status === 'Rejected';
-
-                      return (
-                        <div
-                          key={sub.id}
-                          className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                        >
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-black text-amber-400 text-sm">{formatCurrency(sub.amount)}</span>
-                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                isPending ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
-                                isApproved ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
-                                'bg-red-500/20 text-red-300 border border-red-500/40'
-                              }`}>
-                                {isPending ? 'Menunggu Verifikasi' : isApproved ? 'Diterima & Diverifikasi' : 'Ditolak'}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-300">
-                              Bulan: <span className="font-bold text-amber-300">{sub.paidMonths.join(', ')}</span>
-                            </p>
-                            <p className="text-[10px] text-slate-500 font-mono">
-                              Tanggal Pengajuan: {formatDate(sub.date)}
-                            </p>
-                            {isRejected && sub.rejectionReason && (
-                              <p className="text-[11px] text-red-400 font-medium pt-1">
-                                Alasan Penolakan: {sub.rejectionReason}
-                              </p>
-                            )}
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => setZoomedImage(sub.proofImage)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 rounded-xl text-xs font-bold border border-slate-700 transition-colors shrink-0 cursor-pointer"
-                          >
-                            <Eye size={12} />
-                            Bukti Foto
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="p-8 bg-slate-950/60 rounded-2xl border border-slate-800 text-center text-xs text-slate-500">
-                    Belum ada pengajuan pembayaran online yang Anda kirimkan.
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-        </div>
 
       {/* RULE 3 & 4: MANUAL OFFLINE INPUT FORM & MUTASI TABLE (RT & Bendahara Role) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1528,7 +1231,7 @@ export default function Finance({
           
           {/* Header Controls */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-800">
-            <h4 className="text-sm font-bold uppercase tracking-wider text-white">Riwayat Mutasi Keuangan Kas</h4>
+            <h4 className="text-sm font-bold uppercase tracking-wider text-white">Riwayat Mutasi Keuangan Kas RT</h4>
             
             {/* Search and Filters */}
             <div className="flex flex-wrap items-center gap-2">
@@ -1639,23 +1342,25 @@ export default function Finance({
 
       {/* MODAL: Zoom Proof Image */}
       {zoomedImage && (
-        <div className="fixed inset-0 bg-slate-950/80 flex items-start justify-center pt-4 sm:pt-10 p-4 z-50 animate-fadeIn backdrop-blur-md overflow-y-auto">
-          <div className="relative max-w-lg w-full bg-slate-900 border border-amber-500/30 p-5 rounded-3xl shadow-2xl">
+        <div className="fixed inset-0 bg-slate-950/90 flex items-center justify-center p-4 z-50 animate-fadeIn backdrop-blur-md">
+          <div className="relative max-w-lg w-full bg-slate-900 border border-amber-500/30 p-5 rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
             <button
               onClick={() => setZoomedImage(null)}
               className="absolute -top-3 -right-3 p-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-full shadow-lg transition-colors cursor-pointer"
             >
               <X size={16} />
             </button>
-            <div className="text-xs font-bold text-amber-400 uppercase tracking-widest pb-3 border-b border-slate-800 mb-3">Lampiran Bukti Pembayaran</div>
-            <img src={zoomedImage} alt="Bukti Mutasi Kas" className="w-full max-h-[75vh] object-contain rounded-xl border border-slate-800" />
+            <div className="text-xs font-bold text-amber-400 uppercase tracking-widest pb-3 border-b border-slate-800 mb-3 flex-shrink-0">Lampiran Bukti Pembayaran</div>
+            <div className="overflow-hidden flex-1 flex items-center justify-center">
+              <img src={zoomedImage} alt="Bukti Mutasi Kas" className="max-w-full max-h-[65vh] object-contain rounded-xl border border-slate-800" />
+            </div>
           </div>
         </div>
       )}
 
       {/* MODAL: Printable Receipt (Kuitansi) */}
       {selectedTxForReceipt && (
-        <div className="fixed inset-0 bg-slate-950/80 flex items-start justify-center pt-4 sm:pt-10 p-4 z-50 animate-fadeIn backdrop-blur-md overflow-y-auto">
+        <div id="receipt_modal_wrapper" className="fixed inset-0 bg-slate-950/80 flex items-start justify-center pt-4 sm:pt-10 p-4 z-50 animate-fadeIn backdrop-blur-md overflow-y-auto">
           <div className="bg-slate-900 text-slate-100 rounded-3xl max-w-2xl w-full p-8 shadow-2xl relative border border-amber-500/40">
             
             {/* Close Button on Modal (Hidden in Print) */}
@@ -1668,19 +1373,35 @@ export default function Finance({
             </button>
 
             {/* Receipt Printable Card Area */}
-            <div id="receipt_print_area" className="space-y-6">
+            <div id="receipt_print_area" className="space-y-6 pt-6 sm:pt-8">
               
               {/* Receipt Header */}
               <div className="flex justify-between items-start border-b-2 border-amber-500/50 pb-4">
                 <div>
-                  <h3 className="text-xl font-black uppercase tracking-tight text-white">Kuitansi Pembayaran RT</h3>
-                  <p className="text-xs text-amber-400 font-mono mt-0.5">No: REG/RT-DIGITAL/{selectedTxForReceipt.id.substring(3)}</p>
+                  <h3 className="text-xl font-black uppercase tracking-tight text-white">KUITANSI</h3>
+                  <p className="text-xs text-amber-400 font-mono mt-0.5">
+                    No: {(() => {
+                      let yyyy = '2026';
+                      let mm = '01';
+                      let dd = '01';
+                      if (selectedTxForReceipt.date) {
+                        const parts = selectedTxForReceipt.date.split('-');
+                        if (parts.length === 3) {
+                          yyyy = parts[0];
+                          mm = parts[1];
+                          dd = parts[2];
+                        }
+                      }
+                      const idx = chronologicalTxs.findIndex(t => t.id === selectedTxForReceipt.id);
+                      const seq = idx !== -1 ? idx + 1 : 1;
+                      return `${yyyy}/${mm}/${dd}/CMS04/${seq}`;
+                    })()}
+                  </p>
                 </div>
                 <div className="text-right">
-                  <h4 className="text-sm font-black gold-gradient-text">RT-DIGITAL</h4>
+                  <h4 className="text-sm font-black gold-gradient-text">CMS-04</h4>
                   <p className="text-[10px] text-slate-400 leading-normal">
-                    Administrasi Wilayah RT Digital<br/>
-                    Kabupaten Administrasi Modern
+                    Cluster Mutiara Satria
                   </p>
                 </div>
               </div>
@@ -1698,9 +1419,18 @@ export default function Finance({
                 <div className="grid grid-cols-4 border-b border-slate-800 pb-2">
                   <span className="font-bold text-slate-400">Dibayarkan Kepada:</span>
                   <span className="col-span-3 font-bold text-sm text-white">
-                    {selectedTxForReceipt.type === 'Pemasukan' ? 'Bendahara RT Digital' : selectedTxForReceipt.recipient}
+                    {selectedTxForReceipt.type === 'Pemasukan' ? 'Bendahara RT' : selectedTxForReceipt.recipient}
                   </span>
                 </div>
+
+                {selectedTxForReceipt.type === 'Pengeluaran' && (
+                  <div className="grid grid-cols-4 border-b border-slate-800 pb-2">
+                    <span className="font-bold text-slate-400">Dibayarkan Oleh:</span>
+                    <span className="col-span-3 font-bold text-sm text-white">
+                      Bendahara RT
+                    </span>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-4 border-b border-slate-800 pb-2">
                   <span className="font-bold text-slate-400">Uang Sejumlah:</span>
@@ -1735,14 +1465,13 @@ export default function Finance({
                 {/* Signatures */}
                 <div className="text-center w-48 text-xs text-slate-200 space-y-12">
                   <div>
-                    <p className="text-slate-400">Administrasi RT Digital,</p>
                     <p className="font-mono text-[9px] text-amber-400">Tanda Tangan Digital Resmi</p>
                   </div>
                   <div>
                     <p className="font-bold border-b border-amber-500/40 pb-0.5 mx-4 text-white">
-                      {selectedTxForReceipt.type === 'Pemasukan' ? 'Sarah Amelia' : (selectedTxForReceipt.recipient || 'Petugas RT')}
+                      Sarah Amelia
                     </p>
-                    <p className="text-[10px] text-slate-400">{selectedTxForReceipt.type === 'Pemasukan' ? 'Bendahara RT' : 'Penerima Kas'}</p>
+                    <p className="text-[10px] text-slate-400">Bendahara RT</p>
                   </div>
                 </div>
 
@@ -1750,7 +1479,7 @@ export default function Finance({
 
               {/* Stamp of validation notice */}
               <div className="border-t border-slate-800 pt-3 text-center text-[9px] text-slate-500 leading-normal">
-                Kuitansi ini dibuat secara digital oleh aplikasi RT Digital dan diakui sebagai bukti pembayaran resmi warga dalam lingkup RT.
+                kuitansi ini dibuat secara digital dan diakui sebagai bukti transaksi dalam lingkup RT04
               </div>
 
             </div>
@@ -1779,20 +1508,57 @@ export default function Finance({
       {/* Print Styles inject directly to DOM */}
       <style>{`
         @media print {
-          body * {
-            visibility: hidden;
+          html, body {
+            background: #0f172a !important;
+            height: 100% !important;
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
-          #receipt_print_area, #receipt_print_area * {
-            visibility: visible;
+          body * {
+            visibility: hidden !important;
+          }
+          #receipt_modal_wrapper, #receipt_modal_wrapper * {
+            visibility: visible !important;
+          }
+          #receipt_modal_wrapper {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background: #0f172a !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            z-index: 999999 !important;
+            overflow: hidden !important;
+            display: block !important;
+          }
+          #receipt_modal_wrapper > div {
+            background: #0f172a !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            margin: 0 !important;
           }
           #receipt_print_area {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            padding: 20px;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            padding: 40px !important;
             background: #0f172a !important;
             color: #f8fafc !important;
+            box-sizing: border-box !important;
+          }
+          .print\:hidden {
+            display: none !important;
+            height: 0 !important;
+            width: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
           }
         }
       `}</style>

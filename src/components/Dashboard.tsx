@@ -237,8 +237,8 @@ export default function Dashboard({ currentUser, warga, transactions, submission
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-            <span>Komunitas Wilayah RT</span>
-            <span className="font-mono text-amber-400 font-bold">{totalKK} Warga Sensus</span>
+            <span>Warga aktif RT04</span>
+            <span className="font-mono text-amber-400 font-bold">{totalKK} warga aktif</span>
           </div>
         </div>
 
@@ -265,182 +265,53 @@ export default function Dashboard({ currentUser, warga, transactions, submission
 
       </div>
 
-      {/* Graph and Balance History Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Chart Column (2/3 width on desktop) */}
-        <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col justify-between">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 border-b border-slate-800 pb-4">
-            <div>
-              <h4 className="text-sm font-bold text-white uppercase tracking-wider">Grafik Pemasukan dan Pengeluaran Tiap Bulannya</h4>
-              <p className="text-xs text-slate-400 mt-0.5">Perbandingan fluktuasi arus kas RT secara transparan</p>
-            </div>
-            <div className="flex items-center gap-4 text-xs">
-              <span className="flex items-center gap-2 text-amber-400 font-bold">
-                <span className="w-3 h-3 rounded bg-gradient-to-tr from-amber-500 to-amber-300 shadow-xs"></span>
-                Pemasukan
-              </span>
-              <span className="flex items-center gap-2 text-slate-400 font-bold">
-                <span className="w-3 h-3 rounded bg-slate-600"></span>
-                Pengeluaran
-              </span>
-            </div>
+      {/* Balance History Container */}
+      <div className="w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col justify-between">
+        <div>
+          <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+            <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <Wallet size={18} className="text-amber-400" />
+              RIWAYAT SALDO KAS RT
+            </h4>
           </div>
 
-          {/* Custom SVG Chart */}
-          <div className="relative w-full h-64 flex-1 mt-2">
-            <svg className="w-full h-full" viewBox="0 0 500 220" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="goldBarGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#fbbf24" />
-                  <stop offset="100%" stopColor="#d97706" />
-                </linearGradient>
-                <linearGradient id="slateBarGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#64748b" />
-                  <stop offset="100%" stopColor="#334155" />
-                </linearGradient>
-              </defs>
-
-              {/* Draw Y-axis guide lines */}
-              {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
-                const y = 20 + ratio * 160;
-                const value = Math.round(maxVal * (1 - ratio));
-                return (
-                  <g key={idx}>
-                    <line x1="50" y1={y} x2="480" y2={y} stroke="#1e293b" strokeWidth="1" strokeDasharray="3 3" />
-                    <text x="42" y={y + 3} fill="#64748b" fontSize="8" textAnchor="end" fontFamily="monospace">
-                      {value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : value >= 1000 ? `${Math.round(value / 1000)}k` : value}
-                    </text>
-                  </g>
-                );
-              })}
-
-              {/* Draw Bars */}
-              {chartData.map((data, idx) => {
-                const numBars = chartData.length;
-                const sectionWidth = 430 / numBars;
-                const groupCenterX = 50 + idx * sectionWidth + sectionWidth / 2;
-                
-                // Bar properties
-                const barWidth = 14;
-                const spacing = 4;
-                
-                // Left bar (Pemasukan)
-                const pemHeight = (data.pemasukan / maxVal) * 160;
-                const pemX = groupCenterX - barWidth - spacing / 2;
-                const pemY = 180 - pemHeight;
-
-                // Right bar (Pengeluaran)
-                const pengHeight = (data.pengeluaran / maxVal) * 160;
-                const pengX = groupCenterX + spacing / 2;
-                const pengY = 180 - pengHeight;
-
-                return (
-                  <g key={data.monthKey} className="group/bar">
-                    {/* Month Label */}
-                    <text x={groupCenterX} y="200" fill="#94a3b8" fontSize="9" textAnchor="middle" fontWeight="600">
-                      {data.monthName}
-                    </text>
-
-                    {/* Bar Pemasukan (Gold Gradient) */}
-                    <rect
-                      x={pemX}
-                      y={pemY}
-                      width={barWidth}
-                      height={Math.max(pemHeight, 3)}
-                      rx="3"
-                      fill="url(#goldBarGrad)"
-                      className="cursor-pointer opacity-90 hover:opacity-100 transition-opacity"
-                      onMouseEnter={() => setHoveredBar({ month: data.monthName, type: 'Pemasukan', value: data.pemasukan })}
-                      onMouseLeave={() => setHoveredBar(null)}
-                    />
-
-                    {/* Bar Pengeluaran (Slate/Gray) */}
-                    <rect
-                      x={pengX}
-                      y={pengY}
-                      width={barWidth}
-                      height={Math.max(pengHeight, 3)}
-                      rx="3"
-                      fill="url(#slateBarGrad)"
-                      className="cursor-pointer opacity-90 hover:opacity-100 transition-opacity"
-                      onMouseEnter={() => setHoveredBar({ month: data.monthName, type: 'Pengeluaran', value: data.pengeluaran })}
-                      onMouseLeave={() => setHoveredBar(null)}
-                    />
-                  </g>
-                );
-              })}
-
-              {/* Baseline */}
-              <line x1="45" y1="180" x2="480" y2="180" stroke="#334155" strokeWidth="1" />
-            </svg>
-
-            {/* Interactive Tooltip Overlay */}
-            {hoveredBar && (
-              <div className="absolute top-0 right-0 bg-slate-950 border border-amber-500/40 p-3 rounded-2xl shadow-2xl text-xs z-10 animate-fadeIn text-white">
-                <p className="text-amber-400 text-[10px] uppercase font-bold tracking-wider">{hoveredBar.month}</p>
-                <p className="font-bold text-white mt-0.5 flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${hoveredBar.type === 'Pemasukan' ? 'bg-amber-400' : 'bg-slate-400'}`}></span>
-                  {hoveredBar.type}: <span className="text-amber-300 font-mono font-black">{formatCurrency(hoveredBar.value)}</span>
-                </p>
-              </div>
-            )}
-          </div>
-          
-          <div className="mt-4 p-3 bg-slate-950/80 border border-slate-800 rounded-2xl text-xs text-slate-400 text-center leading-normal">
-            Sorot batang grafik untuk melihat detail nominal pemasukan vs pengeluaran setiap bulan.
-          </div>
-        </div>
-
-        {/* Riwayat Saldo Table (1/3 width on desktop) */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
-              <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <Wallet size={18} className="text-amber-400" />
-                Riwayat Saldo
-              </h4>
-            </div>
-
-            <div className="overflow-x-auto rounded-2xl border border-slate-800">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 text-[10px] font-bold uppercase tracking-wider bg-slate-950">
-                    <th className="py-3 px-2.5">Bulan</th>
-                    <th className="py-3 px-1.5 text-right text-sky-400">Awal</th>
-                    <th className="py-3 px-1.5 text-right text-amber-400">Masuk</th>
-                    <th className="py-3 px-1.5 text-right text-slate-400">Keluar</th>
-                    <th className="py-3 px-2.5 text-right text-emerald-400">Saldo</th>
+          <div className="overflow-x-auto rounded-2xl border border-slate-800">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400 text-[10px] font-bold uppercase tracking-wider bg-slate-950">
+                  <th className="py-3 px-2.5">Bulan</th>
+                  <th className="py-3 px-1.5 text-right text-sky-400">Awal</th>
+                  <th className="py-3 px-1.5 text-right text-amber-400">Masuk</th>
+                  <th className="py-3 px-1.5 text-right text-slate-400">Keluar</th>
+                  <th className="py-3 px-2.5 text-right text-emerald-400">Saldo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/80">
+                {[...chartData].reverse().map((item) => (
+                  <tr key={item.monthKey} className="hover:bg-slate-800/50 transition-colors">
+                    <td className="py-3 px-2.5 font-bold text-slate-200 whitespace-nowrap">{item.monthName}</td>
+                    <td className="py-3 px-1.5 text-right font-mono font-bold text-sky-400 whitespace-nowrap">{formatCurrency(item.saldoAwal)}</td>
+                    <td className="py-3 px-1.5 text-right font-mono font-bold text-amber-400 whitespace-nowrap">{formatCurrency(item.pemasukan)}</td>
+                    <td className="py-3 px-1.5 text-right font-mono font-bold text-slate-400 whitespace-nowrap">{formatCurrency(item.pengeluaran)}</td>
+                    <td className="py-3 px-2.5 text-right font-mono font-black text-emerald-400 whitespace-nowrap">{formatCurrency(item.saldo)}</td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/80">
-                  {[...chartData].reverse().map((item) => (
-                    <tr key={item.monthKey} className="hover:bg-slate-800/50 transition-colors">
-                      <td className="py-3 px-2.5 font-bold text-slate-200 whitespace-nowrap">{item.monthName}</td>
-                      <td className="py-3 px-1.5 text-right font-mono font-bold text-sky-400 whitespace-nowrap">{formatCurrency(item.saldoAwal)}</td>
-                      <td className="py-3 px-1.5 text-right font-mono font-bold text-amber-400 whitespace-nowrap">{formatCurrency(item.pemasukan)}</td>
-                      <td className="py-3 px-1.5 text-right font-mono font-bold text-slate-400 whitespace-nowrap">{formatCurrency(item.pengeluaran)}</td>
-                      <td className="py-3 px-2.5 text-right font-mono font-black text-emerald-400 whitespace-nowrap">{formatCurrency(item.saldo)}</td>
-                    </tr>
-                  ))}
+                ))}
 
-                  {chartData.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-500">
-                        Belum ada data riwayat saldo terdaftar.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="mt-4 border-t border-slate-800 pt-3 text-center">
-            <span className="text-xs text-slate-400">Total Rekapitulasi: <span className="text-white font-bold">{chartData.length} Bulan</span></span>
+                {chartData.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-500">
+                      Belum ada data riwayat saldo terdaftar.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
+        <div className="mt-4 border-t border-slate-800 pt-3 text-center">
+          <span className="text-xs text-slate-400">Total Rekapitulasi: <span className="text-white font-bold">{chartData.length} Bulan</span></span>
+        </div>
       </div>
 
     </div>

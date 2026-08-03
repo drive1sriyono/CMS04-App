@@ -9,7 +9,8 @@ import {
   LogOut, 
   Menu, 
   X,
-  Sparkles
+  Sparkles,
+  CreditCard
 } from 'lucide-react';
 
 // Import Components
@@ -56,6 +57,7 @@ import Finance from './components/Finance';
 import WargaData from './components/WargaData';
 import UserManagement from './components/UserManagement';
 import BackupRestore from './components/BackupRestore';
+import IuranSaya from './components/IuranSaya';
 
 export default function App() {
   // Application Global States
@@ -67,7 +69,7 @@ export default function App() {
   const [dbStatus, setDbStatus] = useState<DatabaseStatus>({ connected: false, mode: 'offline' });
   
   // Navigation States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'profile' | 'finance' | 'warga' | 'users' | 'backup'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'profile' | 'finance' | 'warga' | 'users' | 'backup' | 'iuran-saya'>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Reconcile users with warga list (all non-admin accounts MUST be in Warga list)
@@ -540,6 +542,7 @@ export default function App() {
   // Sidebar navigation options (role-based filter)
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+    { id: 'iuran-saya', label: 'Iuran Saya', icon: <CreditCard size={18} /> },
     { id: 'profile', label: 'Profil Saya', icon: <UserIcon size={18} /> },
     { id: 'finance', label: 'Keuangan Kas', icon: <DollarSign size={18} /> },
     { id: 'warga', label: 'Data Warga', icon: <Users size={18} /> },
@@ -557,6 +560,16 @@ export default function App() {
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard currentUser={currentUser} warga={warga} transactions={transactions} submissions={submissions} dbStatus={dbStatus} />;
+      case 'iuran-saya':
+        return (
+          <IuranSaya 
+            currentUser={currentUser} 
+            warga={warga}
+            transactions={transactions}
+            submissions={submissions}
+            onAddSubmission={handleAddSubmission}
+          />
+        );
       case 'profile':
         return (
           <MyProfile 
@@ -787,7 +800,7 @@ export default function App() {
           <PwaInstallPrompt variant="banner" />
           {renderTabContent()}
           <footer className="mt-12 pt-6 border-t border-slate-900 text-center text-[11px] text-slate-500">
-            ©2026 by CMS04 Digital Team • PWA Mobile & Desktop App
+            ©2026 PORTAL WARGA CMS RT04 • by CMS04 Digital Team
           </footer>
         </main>
 
@@ -795,7 +808,7 @@ export default function App() {
 
       {/* MOBILE BOTTOM NAVIGATION BAR (App Like Experience on Mobile) */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 border-t border-slate-800/90 backdrop-blur-xl flex justify-around items-center py-2 px-1 shadow-2xl pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
-        {visibleNavItems.slice(0, 5).map((item) => {
+        {visibleNavItems.slice(0, 6).map((item) => {
           const isActive = activeTab === item.id;
           return (
             <button
