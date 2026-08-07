@@ -542,6 +542,23 @@ export const fetchAllFromSupabase = async (): Promise<{
   }
 };
 
+const isNetworkErrorMsg = (msg: string) => {
+  const lowercase = String(msg || '').toLowerCase();
+  return lowercase.includes('failed to fetch') || 
+         lowercase.includes('network') || 
+         lowercase.includes('unreachable') || 
+         lowercase.includes('typeerror');
+};
+
+const handleSyncError = (prefix: string, e: any) => {
+  const msg = e?.message || String(e || '');
+  if (isNetworkErrorMsg(msg)) {
+    console.warn(`${prefix} (Offline Mode):`, msg);
+  } else {
+    console.error(`${prefix}:`, e);
+  }
+};
+
 // Single Item Realtime Push Helpers
 export const syncSingleUserToSupabase = async (user: User): Promise<{ success: boolean; error?: string }> => {
   const client = getSupabaseClient();
@@ -551,7 +568,7 @@ export const syncSingleUserToSupabase = async (user: User): Promise<{ success: b
     if (err) return { success: false, error: err.message };
     return { success: true };
   } catch (e: any) {
-    console.error('Error syncing user to Supabase:', e);
+    handleSyncError('Error syncing user to Supabase', e);
     return { success: false, error: e.message };
   }
 };
@@ -562,7 +579,7 @@ export const deleteUserFromSupabase = async (userId: string) => {
   try {
     await client.from('users').delete().eq('id', userId);
   } catch (e) {
-    console.error('Error deleting user from Supabase:', e);
+    handleSyncError('Error deleting user from Supabase', e);
   }
 };
 
@@ -574,7 +591,7 @@ export const syncSingleWargaToSupabase = async (warga: Warga): Promise<{ success
     if (err) return { success: false, error: err.message };
     return { success: true };
   } catch (e: any) {
-    console.error('Error syncing warga to Supabase:', e);
+    handleSyncError('Error syncing warga to Supabase', e);
     return { success: false, error: e.message };
   }
 };
@@ -585,7 +602,7 @@ export const deleteWargaFromSupabase = async (wargaId: string) => {
   try {
     await client.from('warga').delete().eq('id', wargaId);
   } catch (e) {
-    console.error('Error deleting warga from Supabase:', e);
+    handleSyncError('Error deleting warga from Supabase', e);
   }
 };
 
@@ -597,7 +614,7 @@ export const syncSingleTransactionToSupabase = async (tx: FinancialTransaction):
     if (err) return { success: false, error: err.message };
     return { success: true };
   } catch (e: any) {
-    console.error('Error syncing transaction to Supabase:', e);
+    handleSyncError('Error syncing transaction to Supabase', e);
     return { success: false, error: e.message };
   }
 };
@@ -608,7 +625,7 @@ export const deleteTransactionFromSupabase = async (txId: string) => {
   try {
     await client.from('financial_transactions').delete().eq('id', txId);
   } catch (e) {
-    console.error('Error deleting transaction from Supabase:', e);
+    handleSyncError('Error deleting transaction from Supabase', e);
   }
 };
 
@@ -620,7 +637,7 @@ export const syncSingleSubmissionToSupabase = async (sub: PaymentSubmission): Pr
     if (err) return { success: false, error: err.message };
     return { success: true };
   } catch (e: any) {
-    console.error('Error syncing submission to Supabase:', e);
+    handleSyncError('Error syncing submission to Supabase', e);
     return { success: false, error: e.message };
   }
 };
@@ -631,6 +648,6 @@ export const deleteSubmissionFromSupabase = async (subId: string) => {
   try {
     await client.from('payment_submissions').delete().eq('id', subId);
   } catch (e) {
-    console.error('Error deleting submission from Supabase:', e);
+    handleSyncError('Error deleting submission from Supabase', e);
   }
 };

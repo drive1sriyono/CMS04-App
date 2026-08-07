@@ -326,18 +326,18 @@ export default function IuranSaya({
         )}
       </div>
 
-      {/* SECTION c: Kartu Iuran Warga Terdaftar (Minimizable Banner) */}
-      <div className="bg-gradient-to-r from-slate-900 via-amber-950/30 to-slate-900 border border-amber-500/30 rounded-3xl p-5 shadow-xl">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-4 mb-4">
+      {/* SECTION c: Kartu Iuran Warga Terdaftar (Minimizable Banner) - Beautiful white & soft blue background */}
+      <div className="bg-gradient-to-br from-white via-blue-50/50 to-blue-100/60 border border-blue-200/80 rounded-3xl p-5 shadow-xl">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-blue-100 pb-4 mb-4">
           <div className="flex items-start sm:items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5 sm:mt-0">
+            <div className="w-10 h-10 rounded-2xl bg-blue-100/70 border border-blue-200/50 flex items-center justify-center text-blue-600 shrink-0 mt-0.5 sm:mt-0">
               <ShieldCheck size={22} />
             </div>
             <div className="space-y-1">
-              <span className="text-[10px] uppercase font-bold text-amber-400 tracking-widest block">Kartu Iuran Saya</span>
-              <div className="flex flex-wrap items-center gap-2 text-sm font-black text-white leading-tight">
-                <span>Pencatatan Pembayaran: <strong className="text-white">{currentUser.fullName}</strong></span>
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono font-bold whitespace-nowrap">
+              <span className="text-[10px] uppercase font-bold text-blue-600 tracking-widest block">Kartu Iuran Saya</span>
+              <div className="flex flex-wrap items-center gap-2 text-sm font-black text-slate-850 leading-tight">
+                <span>Pencatatan Pembayaran: <strong className="text-slate-900">{currentUser.fullName}</strong></span>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200/60 text-xs font-mono font-bold whitespace-nowrap">
                   Blok Rumah: {currentUser.blok}
                 </span>
               </div>
@@ -348,22 +348,22 @@ export default function IuranSaya({
             <span className={`px-3 py-1 rounded-full text-xs font-bold border ${badgeStyle}`}>
               {statusText}
             </span>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30 font-mono whitespace-nowrap">
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600 border border-blue-200/60 font-mono whitespace-nowrap">
               {activePaidSummary.count > 0 ? `Terbayar s.d. ${activePaidSummary.lastPaidMonth?.replace(' 2026', '')} 2026 (${activePaidSummary.count}/12 Bulan)` : 'Belum Ada Pembayaran'}
             </span>
             <button
               type="button"
               onClick={() => setIsKartuIuranOpen(!isKartuIuranOpen)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-900 text-amber-300 hover:text-amber-400 border-2 border-amber-500/80 text-[11px] font-bold shadow-md shadow-amber-500/10 transition-all cursor-pointer shrink-0"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-blue-600 hover:text-blue-700 border-2 border-blue-200 text-[11px] font-bold shadow-md shadow-blue-100 transition-all cursor-pointer shrink-0"
             >
               {isKartuIuranOpen ? (
                 <>
-                  <ChevronUp size={14} className="text-amber-400" />
+                  <ChevronUp size={14} className="text-blue-500" />
                   <span>Minimize</span>
                 </>
               ) : (
                 <>
-                  <ChevronDown size={14} className="text-amber-400" />
+                  <ChevronDown size={14} className="text-blue-500" />
                   <span>Buka Kartu</span>
                 </>
               )}
@@ -373,7 +373,7 @@ export default function IuranSaya({
 
         {isKartuIuranOpen && (
           <div className="space-y-2">
-            <p className="text-[11px] text-slate-400 font-medium">
+            <p className="text-[11px] text-slate-500 font-medium">
               Progres Pencatatan Iuran Bulanan 2026:
             </p>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
@@ -386,23 +386,23 @@ export default function IuranSaya({
                     key={m}
                     className={`p-2 rounded-xl text-center border transition-all ${
                       isPaid
-                        ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-300 shadow-md shadow-emerald-500/5 font-bold'
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm font-bold'
                         : isPending
-                        ? 'bg-amber-950/70 border-amber-500/50 text-amber-300 shadow-md shadow-amber-500/5 font-bold'
-                        : 'bg-slate-950/60 border-slate-800/80 text-slate-500'
+                        ? 'bg-amber-50 border-amber-200 text-amber-750 shadow-sm font-bold'
+                        : 'card-soft-grey-unpaid border-slate-200 text-slate-400 font-medium'
                     }`}
                   >
                     <div className="flex items-center justify-center gap-1 mb-0.5">
                       {isPaid ? (
-                        <CheckCircle2 size={12} className="text-emerald-400" />
+                        <CheckCircle2 size={12} className="text-emerald-500" />
                       ) : isPending ? (
-                        <CheckCircle2 size={12} className="text-amber-400" />
+                        <CheckCircle2 size={12} className="text-amber-500" />
                       ) : (
-                        <XCircle size={12} className="text-slate-600" />
+                        <XCircle size={12} className="text-slate-400" />
                       )}
                       <span className="text-[11px] font-bold">{shortMonth}</span>
                     </div>
-                    <span className={`text-[9px] font-mono block ${isPaid ? 'text-emerald-400 font-bold' : isPending ? 'text-amber-400 font-bold' : 'text-slate-600'}`}>
+                    <span className={`text-[9px] font-mono block ${isPaid ? 'text-emerald-600 font-bold' : isPending ? 'text-amber-600 font-bold' : 'text-slate-400 font-medium'}`}>
                       {isPaid ? 'LUNAS' : isPending ? 'PENDING' : 'BELUM'}
                     </span>
                   </div>
@@ -417,28 +417,28 @@ export default function IuranSaya({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Form Submit Iuran Warga */}
-        <div className="lg:col-span-1 bg-gradient-to-br from-slate-900 via-amber-950/20 to-slate-900 border border-amber-500/40 rounded-3xl p-6 shadow-2xl h-fit">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3.5 mb-5">
+        <div className="lg:col-span-1 bg-gradient-to-br from-white via-blue-50/50 to-blue-100/60 border border-blue-200/80 rounded-3xl p-6 shadow-xl h-fit">
+          <div className="flex items-center justify-between border-b border-blue-100 pb-3.5 mb-5">
             <div className="flex items-center gap-2">
-              <Upload size={20} className="text-amber-400" />
+              <Upload size={20} className="text-blue-600" />
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-white">Form Pengajuan Bayar Iuran</h3>
-                <p className="text-[10px] text-slate-400">Kirim bukti pembayaran iuran Anda ke RT/Bendahara</p>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">Form Pengajuan Bayar Iuran</h3>
+                <p className="text-[10px] text-slate-500">Kirim bukti pembayaran iuran Anda ke RT/Bendahara</p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setIsWargaFormOpen(!isWargaFormOpen)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-900 text-amber-300 hover:text-amber-400 border-2 border-amber-500/80 text-[11px] font-bold shadow-md shadow-amber-500/10 transition-all cursor-pointer shrink-0"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-blue-600 hover:text-blue-700 border-2 border-blue-200 text-[11px] font-bold shadow-md shadow-blue-100 transition-all cursor-pointer shrink-0"
             >
               {isWargaFormOpen ? (
                 <>
-                  <ChevronUp size={14} className="text-amber-400" />
+                  <ChevronUp size={14} className="text-blue-500" />
                   <span>Minimize</span>
                 </>
               ) : (
                 <>
-                  <ChevronDown size={14} className="text-amber-400" />
+                  <ChevronDown size={14} className="text-blue-500" />
                   <span>Buka Form</span>
                 </>
               )}
@@ -448,11 +448,11 @@ export default function IuranSaya({
           {isWargaFormOpen && (
             <form onSubmit={handleWargaSubmit} className="space-y-4 text-xs">
               {/* Nama & Blok User (Readonly) */}
-              <div className="bg-slate-950/80 p-3 rounded-2xl border border-slate-800 space-y-1">
+              <div className="bg-white/80 p-3 rounded-2xl border border-slate-100 space-y-1 shadow-sm">
                 <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest block">Identitas Penyetor</span>
-                <div className="text-xs font-bold text-white flex items-center justify-between gap-2">
+                <div className="text-xs font-bold text-slate-800 flex items-center justify-between gap-2">
                   <span className="truncate">{currentUser.fullName}</span>
-                  <span className="text-amber-300 font-mono font-bold bg-slate-900 border border-slate-800 px-2.5 py-0.5 rounded-full text-[10px] shrink-0 whitespace-nowrap">
+                  <span className="text-blue-600 font-mono font-bold bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-full text-[10px] shrink-0 whitespace-nowrap">
                     Blok {currentUser.blok}
                   </span>
                 </div>
@@ -460,26 +460,26 @@ export default function IuranSaya({
 
               {/* Tanggal Pembayaran */}
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                  <Calendar size={12} className="text-amber-400" />
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                  <Calendar size={12} className="text-blue-500" />
                   Tanggal Transfer / Bayar
                 </label>
                 <input
                   type="date"
                   value={wargaSubDate}
                   onChange={(e) => setWargaSubDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 transition-all font-medium"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500 transition-all font-medium"
                 />
               </div>
 
               {/* Pilihan Bulan Pembayaran */}
-              <div className="p-3.5 bg-slate-950 border border-amber-500/20 rounded-2xl space-y-3">
+              <div className="p-3.5 bg-white border border-blue-100 rounded-2xl space-y-3 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                  <label className="text-xs font-bold text-blue-600 flex items-center gap-1.5">
                     <Calendar size={14} />
                     Pilih Bulan Iuran 2026
                   </label>
-                  <span className="text-[10px] text-amber-300/80 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full font-semibold">
+                  <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full font-semibold">
                     Harus Berurutan
                   </span>
                 </div>
@@ -495,7 +495,7 @@ export default function IuranSaya({
                       return (
                         <div
                           key={m}
-                          className="px-2 py-1.5 rounded-lg text-[9px] font-bold border bg-emerald-950/60 border-emerald-500/40 text-emerald-400 text-center flex flex-col items-center justify-center cursor-not-allowed opacity-80"
+                          className="px-2 py-1.5 rounded-lg text-[9px] font-bold border bg-emerald-50 border-emerald-200 text-emerald-700 text-center flex flex-col items-center justify-center cursor-not-allowed opacity-80"
                           title="Sudah Lunas"
                         >
                           <span className="font-bold">{shortName}</span>
@@ -508,11 +508,11 @@ export default function IuranSaya({
                       return (
                         <div
                           key={m}
-                          className="px-2 py-1.5 rounded-lg text-[9px] font-bold border bg-amber-950/60 border-amber-500/40 text-amber-300 text-center flex flex-col items-center justify-center cursor-not-allowed opacity-80"
+                          className="px-2 py-1.5 rounded-lg text-[9px] font-bold border bg-amber-50 border-amber-200 text-amber-700 text-center flex flex-col items-center justify-center cursor-not-allowed opacity-80"
                           title="Menunggu Verifikasi RT/Bendahara"
                         >
                           <span className="font-bold">{shortName}</span>
-                          <span className="text-[8px] uppercase tracking-tighter text-amber-400">Verifikasi</span>
+                          <span className="text-[8px] uppercase tracking-tighter text-amber-600">Verifikasi</span>
                         </div>
                       );
                     }
@@ -524,8 +524,8 @@ export default function IuranSaya({
                         onClick={() => handleWargaToggleMonth(m)}
                         className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border transition-all text-center flex items-center justify-center gap-1 cursor-pointer ${
                           isSelected 
-                            ? 'bg-amber-500 text-slate-950 border-amber-400 font-black' 
-                            : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-amber-500/40'
+                            ? 'bg-blue-600 text-white border-blue-700 font-bold shadow-sm' 
+                            : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:bg-blue-50/20'
                         }`}
                       >
                         {isSelected && <Check size={10} />}
@@ -536,44 +536,44 @@ export default function IuranSaya({
                 </div>
 
                 {wargaSubMonths.length > 0 && (
-                  <div className="text-[11px] text-amber-300 font-bold pt-1">
-                    {wargaSubMonths.length} Bulan Dipilih: <span className="font-normal text-slate-300">{wargaSubMonths.join(', ')}</span>
+                  <div className="text-[11px] text-blue-600 font-bold pt-1">
+                    {wargaSubMonths.length} Bulan Dipilih: <span className="font-normal text-slate-600">{wargaSubMonths.join(', ')}</span>
                   </div>
                 )}
               </div>
 
               {/* Nominal Total */}
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Nominal Pembayaran (Rp)</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Nominal Pembayaran (Rp)</label>
                 <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-xs font-bold text-amber-400">Rp</span>
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-xs font-bold text-slate-500">Rp</span>
                   <input
                     type="number"
                     value={wargaSubAmount}
                     onChange={(e) => setWargaSubAmount(e.target.value)}
                     placeholder="60000"
-                    className="w-full pl-10 pr-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-amber-300 focus:outline-none focus:border-amber-500 font-mono font-bold"
+                    className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500 font-mono font-bold"
                   />
                 </div>
               </div>
 
               {/* Foto Bukti Pembayaran */}
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center justify-between">
                   <span>Foto Bukti Transfer (Wajib)</span>
-                  <span className="text-[9px] text-amber-400 font-mono font-normal">Kompresi HTML5 Canvas</span>
+                  <span className="text-[9px] text-blue-600 font-mono font-normal">Kompresi HTML5 Canvas</span>
                 </label>
                 <div className="flex items-center justify-center w-full">
-                  <label className="flex flex-col items-center justify-center w-full h-28 border border-amber-500/30 border-dashed rounded-xl cursor-pointer bg-slate-950 hover:bg-slate-800/50 transition-all">
+                  <label className="flex flex-col items-center justify-center w-full h-28 border border-blue-200 border-dashed rounded-xl cursor-pointer bg-white hover:bg-blue-50/20 transition-all">
                     <div className="flex flex-col items-center justify-center pt-3 pb-3">
                       {isCompressingWarga ? (
                         <div className="flex flex-col items-center gap-1">
-                          <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
-                          <span className="text-[10px] text-amber-300 font-bold">Mengompresi Gambar...</span>
+                          <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                          <span className="text-[10px] text-blue-600 font-bold">Mengompresi Gambar...</span>
                         </div>
                       ) : wargaSubProof ? (
                         <div className="relative group w-full h-24 px-2 flex justify-center items-center">
-                          <img src={wargaSubProof} alt="Preview Bukti Transfer" className="h-full max-w-full object-cover rounded-lg border border-slate-700" />
+                          <img src={wargaSubProof} alt="Preview Bukti Transfer" className="h-full max-w-full object-cover rounded-lg border border-slate-200" />
                           <button
                             type="button"
                             onClick={(e) => { e.preventDefault(); setWargaSubProof(''); if (wargaFileInputRef.current) wargaFileInputRef.current.value=''; }}
@@ -584,9 +584,9 @@ export default function IuranSaya({
                         </div>
                       ) : (
                         <>
-                          <Upload size={18} className="text-amber-400 mb-1" />
-                          <p className="text-[10px] text-slate-300"><span className="font-bold text-amber-400">Upload Struk Transfer</span></p>
-                          <p className="text-[8px] text-slate-500">Terkompresi otomatis & jernih</p>
+                          <Upload size={18} className="text-blue-500 mb-1" />
+                          <p className="text-[10px] text-slate-600"><span className="font-bold text-blue-600">Upload Struk Transfer</span></p>
+                          <p className="text-[8px] text-slate-400">Terkompresi otomatis & jernih</p>
                         </>
                       )}
                     </div>
@@ -603,7 +603,7 @@ export default function IuranSaya({
 
               <button
                 type="submit"
-                className="w-full mt-2 py-3 gold-gradient-bg text-slate-950 font-black rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 cursor-pointer"
+                className="w-full mt-2 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/20 cursor-pointer hover:from-blue-700 hover:to-indigo-700"
               >
                 <CheckCircle2 size={16} />
                 Kirim Pengajuan Pembayaran

@@ -642,15 +642,15 @@ export default function WargaData({
                         key={m}
                         className={`p-2.5 rounded-xl border text-center transition-all ${
                           isPaid
-                            ? 'bg-emerald-950/70 border-emerald-500/40 text-emerald-300'
-                            : 'bg-slate-950/70 border-slate-800/80 text-slate-500'
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-bold'
+                            : 'card-soft-grey-unpaid border-slate-200 text-slate-400 font-medium'
                         }`}
                       >
                         <div className="flex items-center justify-center gap-1 mb-1">
-                          {isPaid ? <CheckCircle2 size={13} className="text-emerald-400" /> : <XCircle size={13} className="text-slate-600" />}
+                          {isPaid ? <CheckCircle2 size={13} className="text-emerald-500" /> : <XCircle size={13} className="text-slate-400" />}
                           <span className="text-xs font-bold">{shortName}</span>
                         </div>
-                        <span className={`text-[10px] font-mono font-bold block ${isPaid ? 'text-emerald-400' : 'text-slate-600'}`}>
+                        <span className={`text-[10px] font-mono block ${isPaid ? 'text-emerald-600 font-bold' : 'text-slate-400 font-medium'}`}>
                           {isPaid ? 'LUNAS (Rp 60rb)' : 'BELUM BAYAR'}
                         </span>
                       </div>

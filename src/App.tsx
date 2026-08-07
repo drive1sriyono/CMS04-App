@@ -135,12 +135,20 @@ export default function App() {
     try {
       const res = await fetchAllFromSupabase();
       if (res.error) {
-        console.error("Sync error:", res.error);
+        const isNetworkErr = res.error.includes('Failed to fetch') || res.error.includes('TypeError') || res.error.includes('network') || res.error.includes('unreachable');
+        if (isNetworkErr) {
+          console.warn("Supabase tidak terjangkau (Offline Mode):", res.error);
+        } else {
+          console.error("Sync error:", res.error);
+        }
+
         setDbStatus(prev => {
+          const errMsg = isNetworkErr ? 'Mode Lokal (Offline)' : `Gagal Sinkronisasi: ${res.error}`;
           const updated = {
             ...prev,
             connected: false,
-            lastTested: `Gagal Sinkronisasi: ${res.error} (${new Date().toLocaleTimeString('id-ID')})`
+            mode: 'offline' as const,
+            lastTested: `${errMsg} (${new Date().toLocaleTimeString('id-ID')})`
           };
           saveStoredDbStatus(updated);
           return updated;
@@ -345,8 +353,15 @@ export default function App() {
     // Run sync immediately on mount
     runSync();
 
-    // Setup background periodic synchronization (every 3 seconds for fast multi-device sync)
-    const intervalId = setInterval(runSync, 3000);
+    // Setup background periodic synchronization (every 20 seconds for multi-device sync, avoids aggressive spamming when offline)
+    const intervalId = setInterval(runSync, 20000);
+
+    // Browser network status listeners to immediately trigger sync on recovery
+    const handleOnline = () => {
+      console.log('Perangkat kembali online, menjalankan sinkronisasi...');
+      runSync();
+    };
+    window.addEventListener('online', handleOnline);
 
     // BroadcastChannel listener for multi-tab instant sync
     let bc: BroadcastChannel | null = null;
@@ -365,6 +380,7 @@ export default function App() {
 
     return () => {
       clearInterval(intervalId);
+      window.removeEventListener('online', handleOnline);
       if (bc) bc.close();
     };
   }, [runSync]);
@@ -1014,15 +1030,15 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans selection:bg-red-500 selection:text-white">
       
       {/* Top Mobile Bar (Hidden in desktop) */}
-      <header className="md:hidden bg-slate-900 border-b border-slate-800 px-3.5 py-2.5 flex items-center justify-between sticky top-0 z-40 shadow-xl">
+      <header className="md:hidden bg-white border-b border-slate-200 px-3.5 py-2.5 flex items-center justify-between sticky top-0 z-40 shadow-sm">
         <div className="flex items-center gap-2">
           <Cms04Logo size={32} />
           <div>
-            <span className="font-black text-white text-base tracking-tight block leading-tight">CMS04</span>
-            <span className="text-[8px] text-amber-400 font-bold tracking-widest block uppercase">CMS RT04 PWA</span>
+            <span className="font-black text-slate-900 text-base tracking-tight block leading-tight">CMS04</span>
+            <span className="text-[8px] text-red-600 font-bold tracking-widest block uppercase">CMS RT04 PWA</span>
           </div>
         </div>
         
@@ -1030,7 +1046,7 @@ export default function App() {
           <PwaInstallPrompt variant="compact" />
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 text-amber-400 hover:text-white rounded-xl bg-slate-800 border border-slate-700 cursor-pointer"
+            className="p-2 text-red-600 hover:text-red-700 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer"
             title="Buka menu navigasi"
           >
             {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
@@ -1042,17 +1058,17 @@ export default function App() {
       <div className="flex-1 flex flex-col md:flex-row relative">
         
         {/* SIDEBAR (Desktop) */}
-        <aside className="hidden md:flex flex-col w-64 bg-slate-900/95 border-r border-slate-800/90 shrink-0 sticky top-0 h-screen justify-between p-5 shadow-2xl backdrop-blur-lg">
+        <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 shrink-0 sticky top-0 h-screen justify-between p-5 shadow-sm">
           <div className="space-y-6">
             
             {/* Logo Header */}
             <div className="flex items-center gap-3 px-2">
               <Cms04Logo size={44} />
               <div className="min-w-0">
-                <span className="font-black text-white text-lg tracking-tight block leading-none">
-                  CMS<span className="gold-gradient-text">04</span>
+                <span className="font-black text-slate-800 text-lg tracking-tight block leading-none">
+                  CMS<span className="text-red-600">04</span>
                 </span>
-                <span className="text-[9px] text-amber-400 font-bold uppercase tracking-widest block mt-1">PORTAL WARGA CMS RT04</span>
+                <span className="text-[9px] text-red-600 font-extrabold uppercase tracking-widest block mt-1">PORTAL WARGA CMS RT04</span>
               </div>
             </div>
 
@@ -1066,11 +1082,11 @@ export default function App() {
                     onClick={() => setActiveTab(item.id as any)}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
                       isActive 
-                        ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 text-slate-950 shadow-lg shadow-amber-500/20 font-black' 
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800/80 border border-transparent'
+                        ? 'bg-gradient-to-r from-red-600 to-red-500 text-white shadow-md shadow-red-500/10 font-black' 
+                        : 'text-slate-500 hover:text-slate-850 hover:bg-slate-100 border border-transparent'
                     }`}
                   >
-                    <span className={isActive ? 'text-slate-950' : 'text-amber-500/80'}>{item.icon}</span>
+                    <span className={isActive ? 'text-white' : 'text-red-500'}>{item.icon}</span>
                     <span>{item.label}</span>
                   </button>
                 );
@@ -1079,14 +1095,14 @@ export default function App() {
           </div>
 
           {/* User Profile Capsule & Logout (Desktop Bottom) */}
-          <div className="border-t border-slate-800/80 pt-4 space-y-3">
-            <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-950/80 border border-amber-500/20">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black flex items-center justify-center text-xs font-mono shadow-sm">
+          <div className="border-t border-slate-100 pt-4 space-y-3">
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200/60">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-red-600 to-red-500 text-white font-black flex items-center justify-center text-xs font-mono shadow-sm">
                 {currentUser.username.substring(0, 2).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
-                <span className="font-bold text-white text-xs block truncate leading-tight">{currentUser.fullName}</span>
-                <span className="text-[9px] text-amber-400 font-mono block uppercase tracking-wider font-bold mt-0.5 flex items-center gap-1">
+                <span className="font-bold text-slate-800 text-xs block truncate leading-tight">{currentUser.fullName}</span>
+                <span className="text-[9px] text-red-600 font-mono block uppercase tracking-wider font-bold mt-0.5 flex items-center gap-1">
                   <Sparkles size={9} />
                   {currentUser.role}
                 </span>
@@ -1095,7 +1111,7 @@ export default function App() {
 
             <button
               onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-slate-800 hover:bg-red-950/60 hover:text-red-400 text-slate-300 rounded-xl text-xs font-bold transition-all border border-slate-700/80 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-slate-50 hover:bg-red-50 hover:text-red-600 text-slate-600 rounded-xl text-xs font-bold transition-all border border-slate-200 cursor-pointer"
             >
               <LogOut size={14} />
               Keluar Sesi
@@ -1105,19 +1121,19 @@ export default function App() {
 
         {/* MOBILE MENU DRAWER (Mobile Only overlay) */}
         {mobileMenuOpen && (
-          <div className="md:hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex justify-start animate-fadeIn">
-            <div className="w-72 bg-slate-900 border-r border-slate-800 h-full p-5 flex flex-col justify-between shadow-2xl">
+          <div className="md:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex justify-start animate-fadeIn">
+            <div className="w-72 bg-white border-r border-slate-200 h-full p-5 flex flex-col justify-between shadow-2xl">
               <div className="space-y-6">
                 
                 {/* Logo with Close button */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <Cms04Logo size={32} />
-                    <span className="font-black text-white tracking-tight">CMS04</span>
+                    <span className="font-black text-slate-900 tracking-tight">CMS04</span>
                   </div>
                   <button
                     onClick={() => setMobileMenuOpen(false)}
-                    className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-800"
+                    className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg bg-slate-100"
                     title="Tutup menu"
                   >
                     <X size={18} />
@@ -1137,8 +1153,8 @@ export default function App() {
                         }}
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
                           isActive 
-                            ? 'bg-amber-500 text-slate-950 font-black shadow-md' 
-                            : 'text-slate-300 hover:bg-slate-800'
+                            ? 'bg-red-600 text-white font-black shadow-md shadow-red-600/10' 
+                            : 'text-slate-600 hover:bg-slate-100'
                         }`}
                       >
                         {item.icon}
@@ -1150,14 +1166,14 @@ export default function App() {
               </div>
 
               {/* Mobile Logout */}
-              <div className="space-y-3 pt-4 border-t border-slate-800">
+              <div className="space-y-3 pt-4 border-t border-slate-100">
                 <div className="text-xs">
                   <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Pengguna:</span>
-                  <span className="font-bold text-white mt-0.5 block">{currentUser.fullName} ({currentUser.role})</span>
+                  <span className="font-bold text-slate-800 mt-0.5 block">{currentUser.fullName} ({currentUser.role})</span>
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="w-full py-2.5 bg-slate-800 hover:bg-red-900/50 text-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border border-slate-700"
+                  className="w-full py-2.5 bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border border-slate-200"
                 >
                   <LogOut size={14} />
                   Keluar Sesi
@@ -1171,7 +1187,7 @@ export default function App() {
         <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full overflow-y-auto pb-24 md:pb-8">
           <PwaInstallPrompt variant="banner" />
           {renderTabContent()}
-          <footer className="mt-12 pt-6 border-t border-slate-900 text-center text-[11px] text-slate-500">
+          <footer className="mt-12 pt-6 border-t border-slate-200 text-center text-[11px] text-slate-400">
             ©2026 PORTAL WARGA CMS RT04 • by CMS04 Digital Team
           </footer>
         </main>
@@ -1179,7 +1195,7 @@ export default function App() {
       </div>
 
       {/* MOBILE BOTTOM NAVIGATION BAR (App Like Experience on Mobile) */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 border-t border-slate-800/90 backdrop-blur-xl flex justify-around items-center py-2 px-1 shadow-2xl pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 border-t border-slate-200 backdrop-blur-xl flex justify-around items-center py-2 px-1 shadow-2xl pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
         {visibleNavItems.slice(0, 6).map((item) => {
           const isActive = activeTab === item.id;
           return (
@@ -1187,10 +1203,10 @@ export default function App() {
               key={item.id}
               onClick={() => setActiveTab(item.id as any)}
               className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
-                isActive ? 'text-amber-400 font-bold scale-105' : 'text-slate-400 hover:text-slate-200'
+                isActive ? 'text-red-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              <div className={isActive ? 'p-1 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400' : ''}>
+              <div className={isActive ? 'p-1 bg-red-50 border border-red-200 rounded-lg text-red-600' : ''}>
                 {item.icon}
               </div>
               <span className="text-[10px] tracking-tight">{item.label}</span>
